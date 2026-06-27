@@ -224,8 +224,8 @@ def run_pipeline(
                 log_path=audit_log_path,
             )
 
-            raw_draft = draft_answer(context_stack, provider=provider)
-            grounding_result = grounding_check(raw_draft, context_stack)
+            raw_draft = draft_answer(context_stack, provider=provider, question=item.question)
+            grounding_result = grounding_check(raw_draft, context_stack, question=item.question)
             final_draft = grounding_result.answer
 
             write_audit(

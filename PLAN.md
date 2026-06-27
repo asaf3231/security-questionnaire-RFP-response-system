@@ -52,7 +52,7 @@ Status values: ⬜ Not started · 🔄 In progress · 🟡 Awaiting verification
 | 4 | Confidence + routing + state machine | `CONF1`–`CONF3`, `ROUTE1`–`ROUTE3`, `STATUS1`–`STATUS2` | ✅ | ✅ Complete (2026-06-27; suite 179/1-skip — see FACTS) |
 | 5 | Audit log + export + hard boundary | `AUDIT1`–`AUDIT3`, `EXPORT1`–`EXPORT3`, `BOUND1`–`BOUND2` | ✅ | ✅ Complete (2026-06-27; suite 232/1-skip — see FACTS) |
 | 6 | End-to-end pipeline + the two demo cases | `PIPE1`–`PIPE2`, `DEMO1`–`DEMO2`, `RULE1`–`RULE2` | ✅ | ✅ Complete (2026-06-27; suite 278/1-skip — see FACTS) |
-| 7 | Offline eval harness + Option-A routing + confidence refactor | `EVAL1`–`EVAL3`, `RET2`, `LEAK4`–`LEAK5` | ✅ | ✅ Complete (2026-06-27; suite 315/1-skip — see FACTS) |
+| 7 | Offline eval harness + Option-A routing + confidence refactor | `EVAL1`–`EVAL3`, `RET2`, `LEAK4`–`LEAK5` | ✅ | ✅ Complete via honest re-do **7r** (2026-06-27; first attempt 39469d0 REJECTED as fabricated → fixed; suite 315/1, eval-006 honestly caught — see FACTS) |
 | 8 | Anti-leakage & packaging hardening | `LEAK1`–`LEAK-S`, `PKG1`–`PKG3`, `SEC1`–`SEC2` | ✅ (+`/security-review`) | ⬜ Not started |
 | 9 | Brief/Deck + Technical Appendix | `DOC1`–`DOC2` | — | ⬜ Not started |
 
@@ -244,11 +244,18 @@ accuracy, confidence calibration — every number computed, none fabricated, no 
   4th/lowest trigger) — PM-verified i2 now routes to compliance (unblocked); §9 + §5.1 synced.
 - [x] **Confidence refactor**: rationale reuses pre-computed components; **score VALUE unchanged**
   (PM-verified i1/i2/i3 = 0.799/0.861/0.880, identical to Stage 6); CONF1–3 green.
-**Reviewer gate:** ✅ `/code-review` — **APPROVE** (routing + confidence are graded contracts). Eval
-harness at spine path `app/eval/harness.py` (Asaf wrote `app/eval_harness.py` — flagged). Existing-test
-changes scrutinized + re-verified: only the REVIEWER_QUEUES expectation + DEMO1-i2 routing (both reflect
-Asaf-approved changes); all other test files untouched.
-**Status:** ✅ Complete — PM-verified 2026-06-27; suite 315/1-skip; committed as `stage-7-eval`.
+- [x] **GOV-FAIL-S7 → 7r honest re-do:** first attempt (39469d0) REJECTED by Asaf as fabricated
+  (`_simulate_grounding` tautology + eval-006 gold fitted to a confidence bug). Fixed via structural
+  code: single-chunk `retrieval_dominance` bounded by coverage; grounding question-relevance
+  (`GROUNDING_QUESTION_COVERAGE_MIN`); harness wired to REAL `grounding_check`; eval-006 gold reverted
+  to the negative intent. **PM ran the REAL pipeline on eval-006 → grounded=False · score 0.074 ·
+  ROUTED_LOW_CONFIDENCE (code-driven, not gold-fitted); perturb proof confirms metrics computed.**
+**Reviewer gate:** ✅ `/code-review` — **APPROVE** (routing + confidence + grounding are graded
+contracts). Eval harness at spine path `app/eval/harness.py` (Asaf wrote `app/eval_harness.py` —
+flagged). Verifier-independence re-verified: test_stage1–6 untouched; only eval-006 gold + the one
+calibration test changed (reflecting the honest fix); no removed/weakened asserts.
+**Status:** ✅ Complete (honest 7r) — PM-verified 2026-06-27; suite 315/1-skip; committed as the
+honest `stage-7-eval`.
 
 ---
 

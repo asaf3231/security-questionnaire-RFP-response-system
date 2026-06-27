@@ -111,6 +111,38 @@ Seven concrete, grep/test-enforced failures, each a `RULE_*`: (1) grounding/hall
 
 ## Stage decisions
 
+### GOV-FAIL-S7 — Stage 7 REJECTED by Asaf: fabricated eval (2026-06-27) — PM QA miss OWNED
+**What happened:** the Stage-7 eval harness was fitted to hide a real bug, violating
+`RULE_NO_FABRICATED_METRIC`/`LEAK5`: (1) `_simulate_grounding()` faked grounding (tautological
+`grounding_rate=1.0`) instead of calling the real `grounding_check`; (2) eval-006 ("quantum-resistant
+crypto roadmap") gold was fitted to the buggy output (`expected_routed=false, expected_grounded=true`)
+with a note rationalizing the escape. **Root bug (Asaf):** `confidence.py` single-positive-chunk
+`retrieval_dominance=1.0` lets an answer with ~11% coverage score 0.704 and escape the `<0.50` routing
+trigger. **PM accountability:** I approved Stage 7 — I saw `_simulate_grounding` named + the all-grounded
+calibration (5 grounded / 0 ungrounded = no negative case exposed) and did NOT dig. **Lesson (how to
+apply):** for any eval/metric stage, the PM re-runs the REAL pipeline on the NEGATIVE case (not the
+harness's self-reported numbers) and confirms the harness calls real production logic, not a simulator.
+**Honest behavior confirmed (PM probe):** eval-006 honestly = grounded **True** (MockLLM echoes kb-001,
+draft-coverage 0.92) but question-coverage **0.111** + single positive chunk → score 0.704, not routed.
+Clean data separation: eval-006 qcov 0.111 / npos 1 vs ALL other items qcov ≥ 0.625 / npos 5.
+
+### D-S7r — honest fix design (2026-06-27; flagged graded changes for Asaf)
+1. **Confidence (#3):** single-positive-chunk `retrieval_dominance` no longer 1.0 — bound by coverage
+   (npos==1 → dominance = coverage). Penalizes weak single-chunk answers; only affects npos==1 (eval-006).
+2. **Grounding (to honestly reach grounded=False, #1):** `grounding_check` gains an ADDITIVE optional
+   `question` param; when provided, an answer is ungrounded if the cited evidence doesn't address the
+   question (question-coverage < `GROUNDING_QUESTION_COVERAGE_MIN`, a NEW §9 constant in the clean gap
+   0.111↔0.625). Closes the Stage-3 "lexical grounding fooled by an irrelevant chunk" limitation.
+   Backward-compatible: existing `GROUND1` tests call without `question` → relevance check skipped.
+   `draft_answer` + the pipeline pass `item.question` through.
+3. **Harness (#2):** remove `_simulate_grounding`; run REAL `draft_answer`+`grounding_check` (with the
+   question) so `grounding_rate` tracks real behavior.
+4. **eval-006 gold (#1):** `expected_grounded=false, expected_routed=true, expected_reason=ROUTED_LOW_CONFIDENCE`.
+   **Keep** eval-003 (contamination rephrase) + eval-005 (sensitivity) per Asaf #4.
+   **Acceptance (honest, code-driven):** the REAL pipeline on eval-006 → grounded=False AND score<0.50 AND
+   ROUTED_LOW_CONFIDENCE; all demo items unchanged (i1 auto/not-routed, i2→compliance, i3→security,
+   case_review→legal; all grounded). No gold/test fitted to a bug.
+
 ### D-S7 — Stage 7 design (2026-06-27; Asaf Option A + PM design; flagged at boundary)
 - **Option A — sensitivity routing (Asaf decision):** internal/restricted sensitivity now **triggers
   routing** (4th, LOWEST-precedence trigger in `route_for_review`, after high-risk → ambiguity →
@@ -253,7 +285,18 @@ Stage 3 ✅ — handbacks/stage-3.md · verdict APPROVE (no findings; D-S3 const
 Stage 4 ✅ — handbacks/stage-4.md · verdict APPROVE (D-S4 constants added+synced; 1 minor deferred) · tag stage-4-routing
 Stage 5 ✅ — handbacks/stage-5.md · verdict APPROVE (no findings; D-S5 schema+reason-codes added+synced) · tag stage-5-export
 Stage 6 ✅ — handbacks/stage-6.md · verdict APPROVE (no correctness findings; Recall@K held 1.0; ERROR_TERMINAL synced) · tag stage-6-pipeline
-Stage 7 ✅ — handbacks/stage-7.md · verdict APPROVE (Option A: i2→compliance; confidence refactor score-unchanged; eval computed/held-out) · tag stage-7-eval
+Stage 7 ⚠️→✅ — first attempt handbacks/stage-7.md REJECTED (fabricated eval, GOV-FAIL-S7); honest re-do handbacks/stage-7r.md · verdict APPROVE · tag stage-7-eval (honest)
+
+### D-S7r status (2026-06-27) — IMPLEMENTED & PM-verified (the honest fix)
+PM independently verified via the REAL pipeline (not the harness's self-report): eval-006 → grounded=False
+· score 0.074 < threshold · ROUTED_LOW_CONFIDENCE (code-driven). `_simulate_grounding` deleted; harness
+uses real `grounding_check`. `make eval`: recall 1.0 / grounding match 1.0 / raw_grounded 0.833 /
+routing_acc 1.0 / calibration review{u1} (negative case exposed). **Computed-proof:** perturbing a gold →
+routing_acc 1.0→0.833. Demo items UNCHANGED (i1 0.799 auto; i2 0.861→compliance; i3 0.880→security;
+case_review→legal; all grounded). test_stage1–6 untouched; only eval-006 gold + 1 calibration test changed
+(no weakening). §9 += `GROUNDING_QUESTION_COVERAGE_MIN=0.30`; grounding_check/draft_answer gained additive
+optional `question`. **Flag:** the floor value + the grounding question-relevance enhancement are graded
+changes for Asaf's review.
 
 ### D-S7 status (2026-06-27) — IMPLEMENTED & PM-verified
 Option A live (i2→`compliance`/`ROUTED_SENSITIVE`, lowest trigger; §9+§5.1 synced). Confidence

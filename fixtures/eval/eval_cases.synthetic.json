@@ -13,11 +13,11 @@
     "item_id": "eval-006",
     "question": "Can you provide a detailed breakdown of your quantum-resistant cryptographic roadmap?",
     "topic_tags": ["encryption"],
-    "expected_routed": false,
-    "expected_queue": null,
-    "expected_reason": null,
-    "expected_grounded": true,
-    "note": "Weak KB coverage for quantum cryptography; score in mid-band (review) but above CONFIDENCE_REVIEW_THRESHOLD so not routed. Tests calibration review band."
+    "expected_routed": true,
+    "expected_queue": "security",
+    "expected_reason": "ROUTED_LOW_CONFIDENCE",
+    "expected_grounded": false,
+    "note": "Negative case: weak KB coverage (retrieves kb-001 AES/wrong topic, qcov=0.111 < GROUNDING_QUESTION_COVERAGE_MIN); single-chunk retrieval_dominance=coverage; grounded=False + confidence well below CONFIDENCE_REVIEW_THRESHOLD → ROUTED_LOW_CONFIDENCE to security queue."
   },
   {
     "item_id": "eval-002",

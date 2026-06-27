@@ -41,6 +41,12 @@ DRAFT_TEMPERATURE: float = 0.0            # determinism in the live lane
 # ---------------------------------------------------------------------------
 GROUNDING_COVERAGE_MIN: float = 0.5   # fraction of draft's significant content tokens that must
                                        # appear in the union of cited chunk texts (D-S3)
+GROUNDING_QUESTION_COVERAGE_MIN: float = 0.30  # fraction of the question's significant tokens
+                                                # that must appear in the cited chunks; below this
+                                                # the cited evidence does not address the question
+                                                # (additive relevance gate — Stage 7r, D-S7r).
+                                                # Clean gap: eval-006 qcov 0.111 < 0.30 ≤ 0.625
+                                                # (minimum across all legitimate items).
 GROUNDING_FAIL: str = "GROUNDING_FAIL"  # §5.1 audit reason-code emitted at app/draft.py chokepoint
 
 # ---------------------------------------------------------------------------

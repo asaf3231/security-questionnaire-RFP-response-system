@@ -29,6 +29,7 @@ from app.config import (
     GROUNDING_COVERAGE_MIN,
     GROUNDING_FAIL,
     GROUNDING_MIN_CITATIONS,
+    GROUNDING_QUESTION_COVERAGE_MIN,
     RULE_GROUNDED_ONLY,
     UNGROUNDED_PLACEHOLDER,
 )
@@ -155,6 +156,8 @@ def _ungrounded_result() -> GroundingResult:
 def grounding_check(
     draft: DraftAnswer,
     context_stack: ContextStack,
+    *,
+    question: str | None = None,
 ) -> GroundingResult:
     """Enforce RULE_GROUNDED_ONLY on a draft answer.
 
@@ -166,6 +169,11 @@ def grounding_check(
       3. content coverage < GROUNDING_COVERAGE_MIN
          (the significant content tokens of the draft_text are not well-supported
          by the union of the cited chunks' text)
+      4. [ADDITIVE, Stage 7r] when question is provided:
+         question_coverage < GROUNDING_QUESTION_COVERAGE_MIN
+         (fraction of the question's significant tokens present in the cited
+         chunks' text — the cited evidence does not address the question).
+         When question is None, this condition is skipped (backward-compatible).
 
     Ungrounded → UNGROUNDED_PLACEHOLDER (byte-exact from config; asserted in GROUND1 test)
                  + reason_code = GROUNDING_FAIL
@@ -173,6 +181,17 @@ def grounding_check(
 
     The UNGROUNDED_PLACEHOLDER is the byte-exact string from config.UNGROUNDED_PLACEHOLDER.
     Tests assert it byte-for-byte against config.UNGROUNDED_PLACEHOLDER (not a re-typed literal).
+
+    Parameters
+    ----------
+    draft:
+        The DraftAnswer to check.
+    context_stack:
+        The assembled 4-layer context.
+    question:
+        Optional. When provided, enforces the question-relevance check (condition 4):
+        the cited chunks must address the question. When None, behaviour is exactly
+        as before Stage 7r (existing GROUND1 tests call without question → unaffected).
     """
     # --- Condition 1: insufficient citations ---
     if len(draft.citations) < GROUNDING_MIN_CITATIONS:
@@ -196,6 +215,19 @@ def grounding_check(
     if coverage < GROUNDING_COVERAGE_MIN:
         return _ungrounded_result()
 
+    # --- Condition 4 [Stage 7r — additive]: question-relevance check ---
+    # Only enforced when question is explicitly provided (backward-compatible).
+    # Checks that the cited chunks address the question itself, not just that
+    # the draft text is lexically covered by the citations.
+    if question is not None:
+        question_tokens = _significant_tokens(question)
+        if question_tokens:
+            cited_tokens = _significant_tokens(cited_text)
+            question_overlap = question_tokens.intersection(cited_tokens)
+            question_coverage = len(question_overlap) / len(question_tokens)
+            if question_coverage < GROUNDING_QUESTION_COVERAGE_MIN:
+                return _ungrounded_result()
+
     # All conditions passed → grounded
     return GroundingResult(grounded=True, answer=draft, reason_code=None)
 
@@ -208,6 +240,7 @@ def draft_answer(
     context_stack: ContextStack,
     *,
     provider: LLMProvider | None = None,
+    question: str | None = None,
 ) -> DraftAnswer:
     """Draft a grounded answer for one questionnaire item.
 
@@ -215,7 +248,7 @@ def draft_answer(
       1. Resolve provider → default to MockLLM() (the offline, deterministic path).
       2. Call provider.draft(context_stack) to get a raw draft.
          Any provider error is handled inside the provider and returns UNGROUNDED_PLACEHOLDER.
-      3. Pass the raw draft through grounding_check(); return grounding_check().answer.
+      3. Pass the raw draft through grounding_check(question=question); return grounding_check().answer.
          The reason_code (GROUNDING_FAIL or None) is returned as part of GroundingResult
          and consumed by the pipeline/audit layer in Stages 5–6.
 
@@ -226,6 +259,11 @@ def draft_answer(
     provider:
         An LLMProvider to use. Defaults to MockLLM() (offline/deterministic).
         Pass ClaudeLLM() only from the gated live lane (make demo-live).
+    question:
+        Optional. When provided, forwarded to grounding_check() to enforce the
+        question-relevance check (Stage 7r additive gate, condition 4).
+        When None, behaviour is exactly as before Stage 7r — existing callers
+        (GROUND1 tests, etc.) that don't pass question are unaffected.
 
     Returns
     -------
@@ -244,5 +282,5 @@ def draft_answer(
         # Never re-raised; never a partial/invented answer.
         return DraftAnswer(text=UNGROUNDED_PLACEHOLDER, citations=[])
 
-    result = grounding_check(raw, context_stack)
+    result = grounding_check(raw, context_stack, question=question)
     return result.answer

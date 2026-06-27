@@ -572,32 +572,49 @@ class TestEVAL3:
         assert total == n
 
     def test_calibration_reflects_confidence_band_distribution(self):
-        """EVAL3: calibration bands map directly from confidence_band() — no manual assignment."""
+        """EVAL3: calibration bands map directly from confidence_band() — no manual assignment.
+
+        Stage 7r update (D-S7r): _simulate_grounding has been deleted; this test
+        now independently re-derives the calibration using the REAL production
+        grounding path (assemble_context + draft_answer(question=...) +
+        grounding_check(question=...)) to confirm it matches run_eval().
+        """
         from app.eval.harness import run_eval, _load_eval_cases
-        from app.kb import load_kb, load_policy_tags
+        from app.kb import load_kb
         from app.retrieval import Retriever
         from app.confidence import score_confidence, confidence_band
-        from app.draft import GroundingResult
-        from app.schema import DraftAnswer, Citation, QuestionnaireItem
-        from app.eval.harness import _simulate_grounding
+        from app.draft import draft_answer, grounding_check
+        from app.context_stack import assemble_context
+        from app.schema import QuestionnaireItem
+        from app.llm import MockLLM
 
-        # Re-derive the calibration independently and check it matches run_eval()
+        # Re-derive the calibration independently using the real production path
         cases = _load_eval_cases()
         kb = load_kb()
         r = Retriever(kb)
+        provider = MockLLM()
 
         expected_auto_grounded = 0
         expected_auto_ungrounded = 0
         expected_review_grounded = 0
         expected_review_ungrounded = 0
 
-        for case in cases:
+        for idx, case in enumerate(cases, start=1):
+            question = case["question"]
+            topic_tags = case.get("topic_tags") or []
             chunks = r.retrieve(
-                question=case["question"],
-                topic_tags=case.get("topic_tags") or None,
+                question=question,
+                topic_tags=topic_tags or None,
             )
-            grounding = _simulate_grounding(chunks)
-            conf = score_confidence(chunks, grounding, case["question"])
+            item = QuestionnaireItem(
+                item_id=case["item_id"],
+                question=question,
+                topic_tags=topic_tags,
+            )
+            ctx = assemble_context(item, chunks, item_number=idx, total_items=len(cases))
+            raw = draft_answer(ctx, provider=provider, question=question)
+            grounding = grounding_check(raw, ctx, question=question)
+            conf = score_confidence(chunks, grounding, question)
             band = confidence_band(conf.score)
             if band == "auto":
                 if grounding.grounded:

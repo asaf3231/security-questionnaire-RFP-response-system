@@ -9,8 +9,11 @@ The score is the equal-weight mean of three bounded [0,1] validators:
   1. coverage          — fraction of the question's significant tokens present
                          in the union of the retrieved chunk texts.
   2. grounded          — 1.0 if grounding.grounded else 0.0.
-  3. retrieval_dominance — top1/(top1+top2) of the chunks' bm25_scores
-                           (1.0 if only one positive chunk; 0.0 if none).
+  3. retrieval_dominance — when ≥ 2 positive-score chunks: top1/(top1+top2).
+                           when exactly 1 positive chunk: = coverage (no
+                           unearned corroboration bonus for weak single-chunk
+                           answers — Stage 7r fix, D-S7r).
+                           when 0 positive chunks: 0.0.
 
 The rationale string is a deterministic offline template.  A live-lane LLM
 rationale is a documented future extension — not built here (no dead code).
@@ -19,6 +22,11 @@ Stage 7 refactor (D-S7): coverage and retrieval_dominance are computed ONCE in
 the new private _compute_components() helper and reused by score_confidence() for
 both the numeric score and the rationale string — no duplicate calculation, no
 possible drift between the reported number and the rationale prose.
+
+Stage 7r fix (D-S7r): when there is exactly one positive-score chunk,
+retrieval_dominance is now = coverage (previously 1.0, which gave an unearned
+corroboration bonus to weak single-chunk answers). Multi-chunk (npos≥2) and
+zero-positive cases are UNCHANGED.
 
 _compute_score() signature is UNCHANGED (still returns float) so existing tests
 continue to pass unchanged.  score_confidence() now calls _compute_components()
@@ -103,7 +111,12 @@ def _compute_components(
         retrieval_dominance = 0.0
         top1, top2 = 0.0, 0.0
     elif len(positive_scores) == 1:
-        retrieval_dominance = 1.0
+        # Stage 7r fix (D-S7r): a single positive-score chunk gives no
+        # corroboration bonus — retrieval_dominance is bounded by coverage
+        # so weak single-chunk answers are penalised (eval-006 is the
+        # canonical example: qcov=0.111, formerly retrieval_dominance=1.0).
+        # Multi-chunk (npos≥2) and zero-positive cases are UNCHANGED.
+        retrieval_dominance = coverage
         top1, top2 = positive_scores[0], 0.0
     else:
         top1, top2 = positive_scores[0], positive_scores[1]
@@ -201,13 +214,13 @@ def score_confidence(
     # Deterministic offline rationale — built from the EXACT component values
     # used to produce the score.  Changing or removing this string does not
     # change .score (CONF2).
-    rd_sum = components.top1 + components.top2
-    rd_val = (components.top1 / rd_sum) if rd_sum > 0.0 else 0.0
+    # Stage 7r: use components.retrieval_dominance directly (the exact value used
+    # in the score) — this correctly reflects the npos==1 fix (dominance=coverage).
     rationale = (
         f"Confidence {score:.3f} = mean("
         f"coverage={components.coverage:.3f}, "
         f"grounded={components.grounded_val:.1f}, "
-        f"retrieval_dominance={rd_val:.3f}"
+        f"retrieval_dominance={components.retrieval_dominance:.3f}"
         f"). "
         f"Retrieved {len(chunks)} chunk(s); top BM25 score {components.top1:.4f}; "
         f"grounding gate: {'PASS' if grounding.grounded else 'FAIL'}."

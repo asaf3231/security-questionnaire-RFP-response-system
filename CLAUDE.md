@@ -288,7 +288,7 @@ string constants in `app/config.py` (e.g. `RULE_NO_EXTERNAL_SEND = "RULE_NO_EXTE
 
 | `RULE_*` | One-line contract | Chokepoint (module) | Audit reason-code | QA ID |
 |---|---|---|---|---|
-| `RULE_GROUNDED_ONLY` | Every asserted answer cites ≥ `GROUNDING_MIN_CITATIONS` retrieved chunk; ungrounded ⇒ `UNGROUNDED_PLACEHOLDER` + route, never an invented answer | `app/draft.py` (`grounding_check`) | `GROUNDING_FAIL` | `GROUND1`, `LEAK-G` |
+| `RULE_GROUNDED_ONLY` | Every asserted answer cites ≥ `GROUNDING_MIN_CITATIONS` retrieved chunk, the draft is covered by its cited chunks (≥ `GROUNDING_COVERAGE_MIN`), AND (Stage 7r) the cited evidence addresses the question (question-coverage ≥ `GROUNDING_QUESTION_COVERAGE_MIN`); otherwise ⇒ `UNGROUNDED_PLACEHOLDER` + route, never an invented answer | `app/draft.py` (`grounding_check`) | `GROUNDING_FAIL` | `GROUND1`, `LEAK-G` |
 | `RULE_NO_SELF_APPROVE` | The agent never transitions an item to `APPROVED`/`EXPORTED`; only a human action performs that transition | `app/state.py` (transition guard) | `SELF_APPROVE_BLOCKED` | `STATUS2`, `BOUND2` |
 | `RULE_HITM_REVIEW_TRIGGER` | Route to a human if **any** (precedence order): (1) high-risk tag (`HIGH_RISK_TAGS`), (2) ambiguous/contradictory retrieval (top1−top2 gap < `AMBIGUITY_SCORE_MARGIN`), (3) confidence < `CONFIDENCE_REVIEW_THRESHOLD`, (4) **internal/restricted sensitivity → `SENSITIVITY_REVIEW_QUEUE` ("compliance")** — Stage 7 / Option A, lowest precedence, unblocks the export gate | `app/routing.py` | `ROUTED_HIGH_RISK` / `ROUTED_AMBIGUOUS` / `ROUTED_LOW_CONFIDENCE` / `ROUTED_SENSITIVE` | `ROUTE1`, `ROUTE2`, `ROUTE3` |
 | `RULE_NO_EXTERNAL_SEND` | No code path sends a response outside the company; `export` writes to local disk only and only for `APPROVED` items | `app/export.py` | `EXTERNAL_SEND_BLOCKED` | `BOUND1` |
@@ -390,6 +390,7 @@ CONFIDENCE_AUTO_THRESHOLD   = 0.75      # >= this AND no trigger → confident a
 CONFIDENCE_REVIEW_THRESHOLD = 0.50      # <  this → mandatory human review (RULE_HITM_REVIEW_TRIGGER)
 GROUNDING_MIN_CITATIONS     = 1         # min retrieved chunks an asserted answer must cite (RULE_GROUNDED_ONLY)
 GROUNDING_COVERAGE_MIN      = 0.5       # (added Stage 3, Asaf-flagged) min fraction of a draft's significant content tokens that must appear in the cited chunks; below → ungrounded
+GROUNDING_QUESTION_COVERAGE_MIN = 0.30 # (added Stage 7r, Asaf governance fix) min fraction of the QUESTION's significant tokens present in the CITED chunks; below → ungrounded (the cited evidence does not address the question — closes the lexical-grounding limitation). Used by grounding_check(question=...)
 AMBIGUITY_SCORE_MARGIN      = 0.10      # top1−top2 BM25-score gap below this → "ambiguous" review trigger
 
 # --- draft model (Stage 3; LIVE lane only — offline path uses MockLLM) ---
