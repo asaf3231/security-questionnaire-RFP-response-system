@@ -160,6 +160,9 @@ class ResponseDocItem(BaseModel):
     confidence_score: Optional[float] = None
     status: str                           # the item's current ITEM_STATE
     queue: Optional[str] = None           # reviewer queue if routed
+    # Stage 5 additive fields (D-S5): used by the sensitivity gate in app/export.py
+    sensitivities: list[str] = Field(default_factory=list)  # sensitivity tags of cited chunks
+    review_approved: bool = False          # True iff item passed the REVIEW_APPROVED human gate
 
 
 class ResponseDoc(BaseModel):

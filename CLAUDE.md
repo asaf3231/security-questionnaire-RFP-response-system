@@ -438,8 +438,9 @@ ROUTED_HIGH_RISK = "ROUTED_HIGH_RISK"      # added Stage 4 (RULE_HITM_REVIEW_TRI
 ROUTED_AMBIGUOUS = "ROUTED_AMBIGUOUS"      # added Stage 4 (RULE_HITM_REVIEW_TRIGGER, app/routing.py)
 ROUTED_LOW_CONFIDENCE = "ROUTED_LOW_CONFIDENCE"  # added Stage 4 (RULE_HITM_REVIEW_TRIGGER, app/routing.py)
 SELF_APPROVE_BLOCKED = "SELF_APPROVE_BLOCKED"    # added Stage 4 (RULE_NO_SELF_APPROVE, app/state.py)
-# (remaining §5.1 reason-codes — SENSITIVITY_HOLD, EXTERNAL_SEND_BLOCKED, ERROR_TERMINAL
-#  — materialized at their stages 5–6)
+SENSITIVITY_HOLD = "SENSITIVITY_HOLD"            # added Stage 5 (RULE_SENSITIVITY_GATE, app/export.py)
+EXTERNAL_SEND_BLOCKED = "EXTERNAL_SEND_BLOCKED"  # added Stage 5 (RULE_NO_EXTERNAL_SEND affirmative, app/export.py)
+# (remaining §5.1 reason-code — ERROR_TERMINAL — materialized at Stage 6)
 ```
 
 - The LLM-provider interface (`LLMProvider`: `draft(context_stack) -> DraftAnswer`) is the **only** way

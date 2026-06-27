@@ -50,7 +50,7 @@ Status values: ⬜ Not started · 🔄 In progress · 🟡 Awaiting verification
 | 2 | KB chunks + deterministic retrieval (`rank_bm25`) | `RET1`–`RET3` | ✅ | ✅ Complete (2026-06-27; suite 71 green; Recall@5 — see FACTS) |
 | 3 | Context Stack + draft generation + grounding | `CTX1`–`CTX4`, `SCHEMA1`, `DRAFT1`–`DRAFT2`, `GROUND1` | ✅ | ✅ Complete (2026-06-27; suite 116/1-skip — see FACTS) |
 | 4 | Confidence + routing + state machine | `CONF1`–`CONF3`, `ROUTE1`–`ROUTE3`, `STATUS1`–`STATUS2` | ✅ | ✅ Complete (2026-06-27; suite 179/1-skip — see FACTS) |
-| 5 | Audit log + export + hard boundary | `AUDIT1`–`AUDIT3`, `EXPORT1`–`EXPORT3`, `BOUND1`–`BOUND2` | ✅ | ⬜ Not started |
+| 5 | Audit log + export + hard boundary | `AUDIT1`–`AUDIT3`, `EXPORT1`–`EXPORT3`, `BOUND1`–`BOUND2` | ✅ | ✅ Complete (2026-06-27; suite 232/1-skip — see FACTS) |
 | 6 | End-to-end pipeline + the two demo cases | `PIPE1`–`PIPE2`, `DEMO1`–`DEMO2`, `RULE1`–`RULE2` | ✅ | ⬜ Not started |
 | 7 | Offline evaluation harness | `EVAL1`–`EVAL3`, `RET2`, `LEAK4`–`LEAK5` | — | ⬜ Not started |
 | 8 | Anti-leakage & packaging hardening | `LEAK1`–`LEAK-S`, `PKG1`–`PKG3`, `SEC1`–`SEC2` | ✅ (+`/security-review`) | ⬜ Not started |
@@ -191,13 +191,18 @@ with the sensitivity gate and review banner, and the no-external-send hard bound
 §7, §9; the state machine.
 **Outputs:** `app/audit.py`, `app/export.py`, `tests/`.
 **Definition of Done (QA: `AUDIT1`–`AUDIT3`, `EXPORT1`–`EXPORT3`, `BOUND1`–`BOUND2`):**
-- [ ] `AUDIT1`–`AUDIT3` — one event per transition/tool call; valid `AuditEvent` schema; redacted
-  (no secret/PII).
-- [ ] `EXPORT1`–`EXPORT3` — export only `APPROVED`, local disk; sensitivity gate holds
-  `internal`/`restricted`; `REVIEW_BANNER` byte-exact on non-approved views.
-- [ ] `BOUND1`/`BOUND2` — no external-send path (static + spy); export unreachable pre-approval.
-**Reviewer gate:** ✅ (audit schema, export chokepoint, three `RULE_*`).
-**Status:** ⬜ Not started.
+- [x] `AUDIT1`–`AUDIT3` — append-only JSONL, one line per `write_audit`; lines parse back to
+  `AuditEvent`; redaction scrubs secret/email/phone (PM-verified placeholders present, raw gone).
+- [x] `EXPORT1`–`EXPORT3` — APPROVED-only Markdown+CSV to local disk; sensitivity gate holds
+  `internal`/`restricted` unless `review_approved` (PM-verified); `REVIEW_BANNER` byte-exact atop
+  non-approved previews.
+- [x] `BOUND1`/`BOUND2` — PM AST-grep: `export.py` imports only `__future__/app/csv/io/pathlib`
+  (zero network primitives); affirmative `RULE_NO_EXTERNAL_SEND` audit; non-APPROVED never exported.
+- [x] Import-safety re-verified: a clean import of all 14 modules creates **no** `audit/`/`exports/` dir.
+**Reviewer gate:** ✅ `/code-review` — **APPROVE**, no correctness findings. **NEW (additive, Asaf-flagged):**
+schema `ResponseDocItem.sensitivities`+`review_approved`; §9 reason-codes `SENSITIVITY_HOLD`,
+`EXTERNAL_SEND_BLOCKED` (synced) — see `NOTES.md` D-S5.
+**Status:** ✅ Complete — PM-verified 2026-06-27; suite 232/1-skip; committed as `stage-5-export`.
 
 ---
 

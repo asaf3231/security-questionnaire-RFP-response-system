@@ -111,6 +111,28 @@ Seven concrete, grep/test-enforced failures, each a `RULE_*`: (1) grounding/hall
 
 ## Stage decisions
 
+### D-S4 resolution — case_confident-i3 (2026-06-27, Asaf): KEEP AS-IS
+Asaf: keep `case_confident-i3` (security tag → ROUTED_HIGH_RISK) exactly as it is — it is a
+**defense-in-depth showcase** (routing fires even inside the "confident" set). Stage-6 demo presents
+i1/i2 as the confident auto-drafts and i3 as the in-set routing example. **Open question CLOSED.**
+
+### D-S5 — Stage 5 audit/export/boundary design (2026-06-27, PM; flagged for Asaf at boundary)
+- **Additive schema fields on `ResponseDocItem`** (needed by the sensitivity gate): `sensitivities:
+  list[str] = []` (the sensitivity tags of the item's cited chunks) + `review_approved: bool = False`
+  (did the item pass the `REVIEW_APPROVED` human gate). The Stage-6 pipeline populates them.
+- **Sensitivity gate (`RULE_SENSITIVITY_GATE`, EXPORT2):** an item whose `sensitivities ∩
+  {internal, restricted}` is **held** from export (SENSITIVITY_HOLD) **unless** `review_approved`;
+  non-sensitive APPROVED items export normally.
+- **Export = APPROVED-only, local disk** (`exports/<qid>.md` + `.csv`). `render_preview()` renders ALL
+  items with the byte-exact `REVIEW_BANNER` prepended when any item is not APPROVED (EXPORT3).
+- **`RULE_NO_EXTERNAL_SEND` (BOUND1):** there is NO network primitive in the export layer (enforced by
+  a static grep test over `app/export.py` for socket/requests/httpx/smtplib/urllib/http.client); export
+  writes an affirmative audit event `rule=RULE_NO_EXTERNAL_SEND` (local-only). BOUND2: non-APPROVED
+  items never reach the export (cross-checks `RULE_NO_SELF_APPROVE`).
+- **NEW §5.1 reason-codes materialized:** `SENSITIVITY_HOLD`, `EXTERNAL_SEND_BLOCKED`. **Why:** the
+  sensitivity gate + the boundary need their audit vocabulary. **How:** synced config↔§9; flagged.
+
+
 ### D-S4 — Stage 4 confidence/routing/state design (2026-06-27, PM; flagged for Asaf at boundary)
 - **Confidence number = mean of three bounded property validators** — `coverage` (fraction of the
   question's significant tokens present in retrieved chunks), `grounded` (1.0/0.0 from the Stage-3
@@ -172,6 +194,18 @@ Stage 1 ✅ — handbacks/stage-1.md · verdict APPROVE (1 finding fixed, SEC1 e
 Stage 2 ✅ — handbacks/stage-2.md · verdict APPROVE (no findings; Recall@5=1.0 computed) · tag stage-2-retrieval
 Stage 3 ✅ — handbacks/stage-3.md · verdict APPROVE (no findings; D-S3 constants added+synced to §9) · tag stage-3-draft
 Stage 4 ✅ — handbacks/stage-4.md · verdict APPROVE (D-S4 constants added+synced; 1 minor deferred) · tag stage-4-routing
+Stage 5 ✅ — handbacks/stage-5.md · verdict APPROVE (no findings; D-S5 schema+reason-codes added+synced) · tag stage-5-export
+
+### D-S5 status (2026-06-27) — IMPLEMENTED & PM-verified
+Additive schema fields (`ResponseDocItem.sensitivities`, `review_approved`) + 2 §5.1 reason-codes
+(`SENSITIVITY_HOLD`, `EXTERNAL_SEND_BLOCKED`) landed in code AND synced into `CLAUDE.md` §9.
+PM independently verified: append-only audit + redaction (raw key/email/phone → placeholders);
+APPROVED-only Markdown+CSV export; sensitivity gate holds internal/restricted unless review_approved;
+byte-exact `REVIEW_BANNER`; **AST-grep proof that `export.py` has zero network primitives**
+(`__future__/app/csv/io/pathlib` only); import creates no `audit/`/`exports/` dir. **Documented
+non-issues (not defects):** redaction is scoped to `detail` (deliberate — other fields are controlled
+enums/ids; the phone regex could otherwise corrupt numeric fields); the affirmative export event reuses
+`EXTERNAL_SEND_BLOCKED` as a compliance marker per the §5.1 mapping.
 
 ### D-S4 status (2026-06-27) — IMPLEMENTED & PM-verified
 The 5 new constants landed in `app/config.py` **and** synced into `CLAUDE.md` §9

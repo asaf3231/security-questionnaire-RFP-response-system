@@ -51,6 +51,14 @@ ROUTED_AMBIGUOUS: str = "ROUTED_AMBIGUOUS"           # ambiguity trigger (app/ro
 ROUTED_LOW_CONFIDENCE: str = "ROUTED_LOW_CONFIDENCE" # low-confidence trigger (app/routing.py)
 SELF_APPROVE_BLOCKED: str = "SELF_APPROVE_BLOCKED"   # agent self-approve blocked (app/state.py)
 
+# ---------------------------------------------------------------------------
+# Stage 5 audit reason-codes (§5.1) — RULE_SENSITIVITY_GATE + RULE_NO_EXTERNAL_SEND
+# ---------------------------------------------------------------------------
+SENSITIVITY_HOLD: str = "SENSITIVITY_HOLD"            # sensitivity gate held item (app/export.py)
+EXTERNAL_SEND_BLOCKED: str = "EXTERNAL_SEND_BLOCKED"  # local-only export confirmed (app/export.py)
+
+# (remaining §5.1 reason-code — ERROR_TERMINAL — materialized at Stage 6)
+
 # Fallback reviewer queue when no item topic_tag maps to the policy routing_map
 # Must be ∈ REVIEWER_QUEUES; kept in §9 (not in data) — avoids editing Stage-1 fixtures (D-S4).
 DEFAULT_REVIEWER_QUEUE: str = "engineering"

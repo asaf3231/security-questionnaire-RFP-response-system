@@ -186,3 +186,38 @@ Markdown+CSV export of APPROVED only (`RULE_NO_EXTERNAL_SEND` + `RULE_SENSITIVIT
 `REVIEW_BANNER`); materialize `SENSITIVITY_HOLD`/`EXTERNAL_SEND_BLOCKED`. Reviewer gate fires.
 Watch out for / open: 5 new §9 constants flagged for Asaf; case_confident-i3 demo nuance (Stage 6);
 confidence-rationale dup (Stage 7 minor); ambiguity uses absolute BM25 gap (works here); `make test` needs venv.
+
+## 2026-06-27 15:45 — [BACKEND] SESSION START
+Picking up: **Stage 4 ✅ verified & locked by Asaf** (case_confident-i3 kept as a defense-in-depth
+showcase — open question RESOLVED); authorized to execute **Stage 5** (audit log + export + hard
+boundary) under the autonomous loop, then HALT at the Stage 5 boundary for Asaf.
+State as read (to re-verify): suite 179/1-skip (`stage-4-routing`); `REVIEW_BANNER`/`UNGROUNDED_PLACEHOLDER`
+byte-exact; AuditEvent/ResponseDoc schemas present. Asaf's Stage 5 reqs: (1) append-only JSONL audit
+(`RULE_AUDIT_COMPLETE`) with AuditEvent Pydantic schema + strict redaction of secrets/PII;
+(2) local-disk-only export — APPROVED-only full extraction; byte-exact `REVIEW_BANNER` atop non-approved
+views; (3) hard boundaries — bulletproof `RULE_NO_EXTERNAL_SEND` (zero network/side-channel in export)
++ `RULE_SENSITIVITY_GATE` wrapping internal/restricted.
+Plan for this session: write `briefs/stage-5.md` (incl. D-S5 additive schema fields + 2 reason-codes);
+spawn cold `general-purpose` executer (Sonnet); PM re-runs `AUDIT*`/`EXPORT*`/`BOUND*` + static
+no-network grep + redaction + sensitivity-gate independently; `/code-review` gate; record FACTS; mark
+Stage 5; commit `stage-5-export`; HALT + handback. Do not advance to Stage 6.
+
+## 2026-06-27 16:20 — [BACKEND] SESSION END / HANDOFF
+Did: **Stage 5 executed via the autonomous loop and PM-verified ✅.** Cold executer built
+`app/audit.py` (append-only JSONL, `new_audit_event`/`write_audit`/`redact`, lazy `audit/` dir) and
+`app/export.py` (Markdown+CSV, APPROVED-only, sensitivity gate, affirmative `RULE_NO_EXTERNAL_SEND`),
++ 2 additive schema fields + 2 reason-codes. PM independent QA: `make test` **232 pass / 1 skip**
+(re-run); redaction (raw key/email/phone → placeholders); APPROVED-only export + sensitivity hold +
+byte-exact `REVIEW_BANNER` re-verified; **AST-grep proof export.py has zero network primitives**;
+**import-safety re-proven** (clean 14-module import creates no `audit/`/`exports/` dir — caught + fixed
+my own earlier bad test). **Verifier-independence:** test_stage1–4 UNTOUCHED; schema + config
+additive-only. **`/code-review`: APPROVE**, no findings (2 documented non-issues). Synced reason-codes
+into §9. Committed `stage-5-export`.
+Status now: ✅ Stage 5 complete, committed. Suite 232/1-skip. **HALTED at the Stage 5 boundary per Asaf.**
+Next PM should: get Asaf's go-ahead, then brief **Stage 6** (end-to-end pipeline + the 2 demo cases;
+`PIPE1`–`PIPE2`/`DEMO1`–`DEMO2`/`RULE1`–`RULE2`) — `app/pipeline.py` with `RULE_SAFE_TERMINAL` +
+`ERROR_TERMINAL`, `scripts/run_demo.py` + `run_live_draft.py`, Makefile `demo`/`demo-live` targets;
+fold in the Stage-6 follow-ups (BM25 build-once; case_confident i1/i2 auto + i3 in-set routing).
+Reviewer gate fires (pipeline orchestration + full RULE_* coverage RULE1/RULE2).
+Watch out for / open: additive schema/reason-codes flagged for Asaf; audit/+exports/ removed during QA
+(regenerate on first run; Stage 8 tracks redacted samples); BM25 build-once + confidence-dup follow-ups; `make test` needs venv.
