@@ -57,7 +57,7 @@ SELF_APPROVE_BLOCKED: str = "SELF_APPROVE_BLOCKED"   # agent self-approve blocke
 SENSITIVITY_HOLD: str = "SENSITIVITY_HOLD"            # sensitivity gate held item (app/export.py)
 EXTERNAL_SEND_BLOCKED: str = "EXTERNAL_SEND_BLOCKED"  # local-only export confirmed (app/export.py)
 
-# (remaining §5.1 reason-code — ERROR_TERMINAL — materialized at Stage 6)
+ERROR_TERMINAL: str = "ERROR_TERMINAL"           # safe-terminal audit reason-code (app/pipeline.py)
 
 # Fallback reviewer queue when no item topic_tag maps to the policy routing_map
 # Must be ∈ REVIEWER_QUEUES; kept in §9 (not in data) — avoids editing Stage-1 fixtures (D-S4).

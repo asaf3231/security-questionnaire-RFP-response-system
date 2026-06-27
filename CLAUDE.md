@@ -440,7 +440,8 @@ ROUTED_LOW_CONFIDENCE = "ROUTED_LOW_CONFIDENCE"  # added Stage 4 (RULE_HITM_REVI
 SELF_APPROVE_BLOCKED = "SELF_APPROVE_BLOCKED"    # added Stage 4 (RULE_NO_SELF_APPROVE, app/state.py)
 SENSITIVITY_HOLD = "SENSITIVITY_HOLD"            # added Stage 5 (RULE_SENSITIVITY_GATE, app/export.py)
 EXTERNAL_SEND_BLOCKED = "EXTERNAL_SEND_BLOCKED"  # added Stage 5 (RULE_NO_EXTERNAL_SEND affirmative, app/export.py)
-# (remaining §5.1 reason-code — ERROR_TERMINAL — materialized at Stage 6)
+ERROR_TERMINAL = "ERROR_TERMINAL"                # added Stage 6 (RULE_SAFE_TERMINAL, app/pipeline.py)
+# All §5.1 audit reason-codes now materialized.
 ```
 
 - The LLM-provider interface (`LLMProvider`: `draft(context_stack) -> DraftAnswer`) is the **only** way

@@ -51,7 +51,7 @@ Status values: ⬜ Not started · 🔄 In progress · 🟡 Awaiting verification
 | 3 | Context Stack + draft generation + grounding | `CTX1`–`CTX4`, `SCHEMA1`, `DRAFT1`–`DRAFT2`, `GROUND1` | ✅ | ✅ Complete (2026-06-27; suite 116/1-skip — see FACTS) |
 | 4 | Confidence + routing + state machine | `CONF1`–`CONF3`, `ROUTE1`–`ROUTE3`, `STATUS1`–`STATUS2` | ✅ | ✅ Complete (2026-06-27; suite 179/1-skip — see FACTS) |
 | 5 | Audit log + export + hard boundary | `AUDIT1`–`AUDIT3`, `EXPORT1`–`EXPORT3`, `BOUND1`–`BOUND2` | ✅ | ✅ Complete (2026-06-27; suite 232/1-skip — see FACTS) |
-| 6 | End-to-end pipeline + the two demo cases | `PIPE1`–`PIPE2`, `DEMO1`–`DEMO2`, `RULE1`–`RULE2` | ✅ | ⬜ Not started |
+| 6 | End-to-end pipeline + the two demo cases | `PIPE1`–`PIPE2`, `DEMO1`–`DEMO2`, `RULE1`–`RULE2` | ✅ | ✅ Complete (2026-06-27; suite 278/1-skip — see FACTS) |
 | 7 | Offline evaluation harness | `EVAL1`–`EVAL3`, `RET2`, `LEAK4`–`LEAK5` | — | ⬜ Not started |
 | 8 | Anti-leakage & packaging hardening | `LEAK1`–`LEAK-S`, `PKG1`–`PKG3`, `SEC1`–`SEC2` | ✅ (+`/security-review`) | ⬜ Not started |
 | 9 | Brief/Deck + Technical Appendix | `DOC1`–`DOC2` | — | ⬜ Not started |
@@ -212,14 +212,19 @@ outputs; prove safe-terminal and full `RULE_*` coverage.
 **Inputs:** all Stage 1–5 modules; `data/questionnaires/case_confident` + `case_review`.
 **Outputs:** `app/pipeline.py`, `scripts/run_demo.py`, `scripts/run_live_draft.py`, `tests/`.
 **Definition of Done (QA: `PIPE1`–`PIPE2`, `DEMO1`–`DEMO2`, `RULE1`–`RULE2`):**
-- [ ] `PIPE1` — full happy path produces a `ResponseDoc`, deterministic under `MockLLM`.
-- [ ] `PIPE2` — injected failure → routed terminal + `ERROR_TERMINAL`; no uncaught exception
-  (`RULE_SAFE_TERMINAL`).
-- [ ] `DEMO1` — confident auto-draft (no trigger; awaits human approval).
-- [ ] `DEMO2` — human-review exception (trigger fires; routed + banner; excluded from export).
-- [ ] `RULE1`/`RULE2` — every `RULE_*` has a live chokepoint and emits its audit reason-code when fired.
-**Reviewer gate:** ✅ (pipeline orchestration, `RULE_*` coverage).
-**Status:** ⬜ Not started.
+- [x] `PIPE1` — full happy path → `ResponseDoc`, deterministic under `MockLLM`; audited per transition.
+- [x] `PIPE2` — injected retriever/provider failure → all items `ROUTED_FOR_REVIEW` + `ERROR_TERMINAL`;
+  **no uncaught exception** (PM-verified by injection). `RULE_SAFE_TERMINAL`.
+- [x] `DEMO1` — `case_confident`: i1 (public) confident→human-approved→exported; i2 (internal) confident
+  but held by sensitivity; i3 (restricted+security) `ROUTED_HIGH_RISK→security` (defense-in-depth showcase).
+- [x] `DEMO2` — `case_review`: both items `ROUTED_HIGH_RISK→legal`; `REVIEW_BANNER` in preview; **not exported**.
+- [x] `RULE1`/`RULE2` — every `RULE_*` greps to its chokepoint + emits its reason-code in the audit (PM-verified).
+- [x] Retrieval refactored to full-corpus `Retriever` (built once); RET1–3 untouched + green; Recall@K held 1.0.
+**Reviewer gate:** ✅ `/code-review` — **APPROVE**, no correctness findings. **Open design question → Asaf:**
+internal/restricted sensitivity is an export gate but not a routing trigger (i2 "stuck" + dropped from demo
+summary) — decide route-vs-gate (NOTES D-S6). `make demo` needs venv active (Stage-8 packaging). `ERROR_TERMINAL`
+added+synced to §9.
+**Status:** ✅ Complete — PM-verified 2026-06-27; suite 278/1-skip; committed as `stage-6-pipeline`.
 
 ---
 

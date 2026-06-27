@@ -6,24 +6,27 @@ approved KB chunks scored by BM25Okapi, returning them as RetrievedChunk objects
 with bm25_score set.
 
 Design notes:
-- Corpus = load_kb() filtered to approved==True only (KB1: non-approved chunks are
-  never retrievable regardless of other filters).
+- The Retriever class builds the BM25Okapi index over the FULL approved corpus ONCE
+  at construction time (standard RAG pattern — stable corpus-level IDF). The pipeline
+  instantiates one Retriever and reuses it across all items (D-S6, Asaf req #2).
+- The module-level retrieve() function is the graded contract; it now delegates to a
+  per-call Retriever(load_kb()) for backward-compatibility. Production callers should
+  build a Retriever once and call retriever.retrieve() directly.
+- Corpus indexing = approved==True only (KB1: non-approved chunks are never retrievable
+  regardless of other filters).
 - Ranking uses rank_bm25 BM25Okapi with params BM25_K1 and BM25_B from config.py.
   Do NOT hand-roll BM25 (Asaf principle B, D-2).
 - Tokenization is deterministic: lowercase + re.split on non-alphanumeric characters.
   The document text per chunk is: chunk.question + " " + chunk.answer (if question
   exists) or just chunk.answer. Same tokenizer applied to the query.
-- Topic filter (strict): if topic_tags is non-empty, restrict the corpus to chunks
-  sharing ≥1 topic tag before ranking.
-- Sensitivity filter: if allowed_sensitivities is provided, restrict to chunks whose
-  sensitivity ∈ allowed_sensitivities. Default None = all sensitivities pass.
-  NOTE: the sensitivity GATE (blocking internal/restricted from export) is enforced
-  downstream at routing/export (RULE_SENSITIVITY_GATE, Stages 4/5), NOT here.
-  Retrieval intentionally sees all approved chunks so the agent can draft grounded
-  answers; the gate protects the output, not the retrieval corpus.
+- Full-corpus index then filter: the BM25 index is built over the FULL approved corpus;
+  filters (topic/sensitivity) are applied AFTER scoring, before top-k selection.
+  This is the standard RAG pattern (stable corpus-level IDF). Note: this changes BM25
+  raw scores vs a per-filtered-corpus index but the rank ordering stays consistent for
+  high-coverage queries (see RET1/RET2/RET3 which remain green).
 - Tiebreak: results are sorted descending by bm25_score with a deterministic secondary
   sort by chunk_id (ascending) so that RET3 holds across runs.
-- Import-safe: no side effects at import — all work happens inside the retrieve() call.
+- Import-safe: no side effects at import — all work happens inside function/method calls.
 - No network, no .env, no data/* read at import.
 """
 
@@ -67,8 +70,104 @@ def _chunk_text(chunk: RetrievedChunk) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Retriever class — builds the BM25 index ONCE over the full approved corpus
+# ---------------------------------------------------------------------------
+
+class Retriever:
+    """Deterministic BM25 retriever that builds the index once at construction.
+
+    The BM25Okapi index is built over ALL approved chunks at __init__ time so
+    that IDF weights are stable across queries (standard RAG pattern, D-S6).
+    Topic/sensitivity filters are applied AFTER scoring, before top-k selection.
+
+    Usage (pipeline):
+        retriever = Retriever(load_kb())  # build once
+        for item in questionnaire["items"]:
+            chunks = retriever.retrieve(item.question, topic_tags=item.topic_tags)
+    """
+
+    def __init__(self, chunks: list[RetrievedChunk]) -> None:
+        """Build the BM25Okapi index over approved chunks.
+
+        Parameters
+        ----------
+        chunks:
+            All KB chunks (approved + non-approved); only approved==True chunks
+            are indexed (KB1).
+        """
+        # Filter to approved only — KB1 invariant
+        self._approved: list[RetrievedChunk] = [c for c in chunks if c.approved]
+
+        if self._approved:
+            tokenized_corpus = [_tokenize(_chunk_text(c)) for c in self._approved]
+            self._bm25 = BM25Okapi(tokenized_corpus, k1=BM25_K1, b=BM25_B)
+        else:
+            self._bm25 = None
+
+    def retrieve(
+        self,
+        question: str,
+        *,
+        topic_tags: Optional[list[str]] = None,
+        allowed_sensitivities: Optional[list[str]] = None,
+        top_k: int = RETRIEVAL_TOP_K,
+    ) -> list[RetrievedChunk]:
+        """Return the top-K approved KB chunks most relevant to question.
+
+        Scores the query against the full approved-corpus index, then applies
+        topic/sensitivity filters to the scored results, then returns top-k.
+
+        Parameters
+        ----------
+        question:
+            The question text to retrieve evidence for.
+        topic_tags:
+            If non-empty, restrict results to chunks sharing ≥1 topic tag.
+        allowed_sensitivities:
+            If provided, restrict results to chunks whose sensitivity ∈ this list.
+            Default None = all sensitivities pass.
+        top_k:
+            Maximum number of chunks to return (≤ RETRIEVAL_TOP_K).
+
+        Returns
+        -------
+        list[RetrievedChunk]
+            Up to top_k chunks, sorted descending by bm25_score with chunk_id as
+            the deterministic tiebreak (ascending). bm25_score is set on each chunk.
+            Returns an empty list if the corpus is empty or all filtered out.
+        """
+        if not self._approved or self._bm25 is None:
+            return []
+
+        # Score query against the full approved-corpus index
+        tokenized_query = _tokenize(question)
+        scores = self._bm25.get_scores(tokenized_query)
+
+        # Attach scores to chunks
+        scored: list[tuple[float, str, RetrievedChunk]] = []
+        for chunk, score in zip(self._approved, scores):
+            scored_chunk = chunk.model_copy(update={"bm25_score": float(score)})
+            scored.append((float(score), chunk.chunk_id, scored_chunk))
+
+        # Apply tag/sensitivity filters AFTER scoring
+        if topic_tags:
+            topic_set = set(topic_tags)
+            scored = [t for t in scored if topic_set.intersection(t[2].topic_tags)]
+
+        if allowed_sensitivities is not None:
+            sens_set = set(allowed_sensitivities)
+            scored = [t for t in scored if t[2].sensitivity in sens_set]
+
+        # Sort: descending score, then ascending chunk_id (deterministic tiebreak)
+        scored.sort(key=lambda t: (-t[0], t[1]))
+
+        return [t[2] for t in scored[:top_k]]
+
+
+# ---------------------------------------------------------------------------
 # retrieve() — the graded contract (do NOT change the signature; surface as
 # DECISION-NEEDED if the signature must change).
+# Delegates to Retriever(load_kb()) so there is ONE retrieval code path.
 # ---------------------------------------------------------------------------
 
 def retrieve(
@@ -80,17 +179,19 @@ def retrieve(
 ) -> list[RetrievedChunk]:
     """Return the top-K approved KB chunks most relevant to question.
 
+    Delegates to Retriever(load_kb()) — the single retrieval code path.
+    The pipeline should build one Retriever and call retriever.retrieve() directly
+    for efficiency; this function is the backward-compatible module-level entry point.
+
     Parameters
     ----------
     question:
         The question text to retrieve evidence for.
     topic_tags:
-        If non-empty, restrict corpus to chunks sharing ≥1 topic tag (strict filter
-        applied before ranking).
+        If non-empty, restrict results to chunks sharing ≥1 topic tag.
     allowed_sensitivities:
-        If provided, restrict corpus to chunks whose sensitivity ∈ this list.
-        Default None = all sensitivities pass (see module docstring for the
-        deliberate design decision on sensitivity filtering at retrieval time).
+        If provided, restrict results to chunks whose sensitivity ∈ this list.
+        Default None = all sensitivities pass.
     top_k:
         Maximum number of chunks to return (≤ RETRIEVAL_TOP_K).
 
@@ -101,38 +202,10 @@ def retrieve(
         the deterministic tiebreak (ascending). bm25_score is set on each chunk.
         Returns an empty list if the corpus is empty after filtering.
     """
-    # --- Build corpus: approved only, then apply tag/sensitivity filters ---
-    all_chunks = load_kb()
-    corpus = [c for c in all_chunks if c.approved]
-
-    if topic_tags:
-        topic_set = set(topic_tags)
-        corpus = [c for c in corpus if topic_set.intersection(c.topic_tags)]
-
-    if allowed_sensitivities is not None:
-        sens_set = set(allowed_sensitivities)
-        corpus = [c for c in corpus if c.sensitivity in sens_set]
-
-    if not corpus:
-        return []
-
-    # --- Tokenize corpus and query ---
-    tokenized_corpus = [_tokenize(_chunk_text(c)) for c in corpus]
-    tokenized_query = _tokenize(question)
-
-    # --- Score with BM25Okapi (pinned rank_bm25 library; params from config) ---
-    bm25 = BM25Okapi(tokenized_corpus, k1=BM25_K1, b=BM25_B)
-    scores = bm25.get_scores(tokenized_query)
-
-    # --- Attach scores to chunks and sort: descending score, then ascending chunk_id ---
-    scored: list[tuple[float, str, RetrievedChunk]] = []
-    for chunk, score in zip(corpus, scores):
-        # Create a copy of the chunk with bm25_score set
-        scored_chunk = chunk.model_copy(update={"bm25_score": float(score)})
-        scored.append((float(score), chunk.chunk_id, scored_chunk))
-
-    # Primary sort: score descending; secondary sort: chunk_id ascending (deterministic tiebreak)
-    scored.sort(key=lambda t: (-t[0], t[1]))
-
-    # Return top_k results (only the RetrievedChunk objects)
-    return [t[2] for t in scored[:top_k]]
+    retriever = Retriever(load_kb())
+    return retriever.retrieve(
+        question,
+        topic_tags=topic_tags,
+        allowed_sensitivities=allowed_sensitivities,
+        top_k=top_k,
+    )

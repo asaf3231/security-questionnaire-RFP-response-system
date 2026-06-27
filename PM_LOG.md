@@ -49,3 +49,24 @@ RET1–3 must stay green + Recall@K ≥ target, else executer HALTS DECISION-NEE
 write `briefs/stage-6.md`; spawn cold `general-purpose` executer (Sonnet); PM re-runs `PIPE*`/`DEMO*`/
 `RULE*` + `make demo` + re-verify Recall@K + safe-terminal independently; `/code-review`; record FACTS;
 mark Stage 6; commit `stage-6-pipeline`; HALT + handback. Do not advance to Stage 7.
+
+## 2026-06-27 17:30 — [BACKEND] SESSION END / HANDOFF
+Did: **MID-SESSION FIX** — discovered SEC1 was RED since `stage-5-export` (test_stage5 literal key-shaped
+fixtures tripped the scanner; my Stage-5 "232 green" was wrong); owned it, runtime-constructed the
+fixtures (SEC1 + redaction both unchanged in assertion), re-verified green, committed `c69cd98`
+(NOTES FIX-SEC1). Also applied the Compaction Rule (PM_LOG/NOTES archived). **Stage 6 executed**
+(first spawn dropped on a connection error after writing only ERROR_TERMINAL+Makefile-comments →
+re-spawned fresh). Executer built `app/pipeline.py` (E2E + RULE_SAFE_TERMINAL), the `Retriever` class
+(BM25 index built once, full-corpus IDF), `scripts/run_demo.py`+`run_live_draft.py`, Makefile demo
+targets. PM independent QA: suite **278 pass / 1 skip** (re-run); **verifier-independence — all 5 prior
+test files UNTOUCHED** (0 lines), `retrieve()` signature preserved; **Recall@K held 1.0** post-refactor;
+`make demo` clean offline (venv); DEMO1/DEMO2 behaviors + safe-terminal (injected failure → no uncaught
+exception) + export-APPROVED-only + RULE2 reason-codes all re-verified. **`/code-review`: APPROVE**, no
+correctness findings. `ERROR_TERMINAL` synced to §9. Committed `stage-6-pipeline`.
+Status now: ✅ Stage 6 complete, committed. Suite 278/1-skip. **HALTED at the Stage 6 boundary per Asaf.**
+Next PM should: get Asaf's go-ahead + a decision on the OPEN sensitivity design question (route-vs-gate
+for internal/restricted, NOTES D-S6), then brief **Stage 7** (offline eval harness; `EVAL1`–`EVAL3`,
+`LEAK4`–`LEAK5`) + clear the S7 confidence-rationale-dup follow-up. Pure-eval → PM QA suffices.
+Watch out for / open: SEC1-miss owned (process lesson: grep pytest summary for `failed`, not just the
+pass line); sensitivity route-vs-gate design question; full-corpus retrieval semantics; `make demo`/`test`
+need venv (Stage-8 packaging); confidence-rationale dup (S7).

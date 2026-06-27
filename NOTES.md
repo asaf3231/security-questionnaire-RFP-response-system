@@ -228,6 +228,20 @@ Stage 2 ✅ — handbacks/stage-2.md · verdict APPROVE (no findings; Recall@5=1
 Stage 3 ✅ — handbacks/stage-3.md · verdict APPROVE (no findings; D-S3 constants added+synced to §9) · tag stage-3-draft
 Stage 4 ✅ — handbacks/stage-4.md · verdict APPROVE (D-S4 constants added+synced; 1 minor deferred) · tag stage-4-routing
 Stage 5 ✅ — handbacks/stage-5.md · verdict APPROVE (no findings; D-S5 schema+reason-codes added+synced) · tag stage-5-export
+Stage 6 ✅ — handbacks/stage-6.md · verdict APPROVE (no correctness findings; Recall@K held 1.0; ERROR_TERMINAL synced) · tag stage-6-pipeline
+
+### D-S6 status (2026-06-27) — IMPLEMENTED & PM-verified + OPEN design question for Asaf
+Pipeline + Retriever(build-once, full-corpus IDF) + demo scripts landed; PM-verified suite 278/1,
+Recall@K held 1.0, RET1–3 untouched+green, safe-terminal (injected failure → no uncaught exception),
+DEMO1/DEMO2 behaviors, RULE1/RULE2 audit coverage; `make demo` clean offline (venv). `ERROR_TERMINAL`
+synced to §9. **OPEN DESIGN QUESTION (surfaced to Asaf at the Stage 6 boundary):** internal/restricted
+sensitivity is an **export gate** (`RULE_SENSITIVITY_GATE`) but **not a routing trigger** — so a
+*confident, internal-sensitivity* item (case_confident-i2) is never routed to a reviewer yet cannot be
+exported without `REVIEW_APPROVED` → it's "stuck" and the demo summary currently drops it (neither
+exported nor in the pending-review list). **Decision needed:** (a) make internal/restricted sensitivity
+ALSO a routing trigger (route i2 to a sensitivity reviewer), or (b) keep export-gate-only and have the
+demo/workflow surface "confident draft held pending human review-approval." The demo-summary clarity
+fix depends on this choice → deferred until Asaf decides.
 
 > _Per-stage "IMPLEMENTED & PM-verified" verification narratives (D-S3/D-S4/D-S5) compacted to
 > `NOTES_archive.md` 2026-06-27 — all re-fetchable from `FACTS.md` + `handbacks/stage-*.md` + tags.
