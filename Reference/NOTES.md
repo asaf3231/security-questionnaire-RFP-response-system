@@ -1,12 +1,14 @@
-# NOTES.md — Decisions, Verified Facts, Open Questions & Handbacks
+# NOTES.md — Decisions, Open Questions & Handback Pointers
 
 Project: **Alta Outbound Voice Agent (codename: "Aria")**
 Maintained by: Asaf (PM)
 
 > `CLAUDE.md` defines **how** work is done; `PLAN.md` defines **what** the current stage is;
-> `QA_checklist.md` defines **how** each stage is verified; this file records **why** — every
-> non-obvious decision, every verified fact, every open question, and every stage handback.
-> Do not duplicate long plans here; record decisions and the reasoning behind them.
+> `QA_checklist.md` defines **how** each stage is verified; **`FACTS.md` holds the verified numbers**
+> (the only place they live); this file records **why** — every non-obvious decision, every open
+> question, and a **pointer** to each stage handback (the raw payload stays on disk under
+> `handbacks/`). Do not duplicate long plans here; do not restate a number that lives in `FACTS.md`;
+> record decisions and the reasoning behind them.
 
 ---
 
@@ -248,6 +250,10 @@ PM's own eyes) before the stage is marked ✅/committed** — the inline shortcu
 ---
 
 ## Verified facts
+> **Canonical home is now `FACTS.md`** — the live Verified-Facts Ledger. New verified numbers go
+> there (one row, source-of-truth command + date + commit), not here. The dated entries below are
+> retained as a historical record of when each fact was first PM-verified.
+
 *(populated as stages are PM-verified against running code, never from a handback's word)*
 
 - **2026-06-23 16:57 — secret pre-flight CLEAN (PM-run, partial `SEC1`/`LEAK1`):** after `git init`, the only

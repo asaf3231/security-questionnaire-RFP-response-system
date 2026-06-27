@@ -4,7 +4,9 @@ Project: **Alta Outbound Voice Agent ("Aria")**
 Maintained by: Asaf
 
 > This file is the verification contract. `CLAUDE.md` defines the rules, `PLAN.md` tracks the stages,
-> `NOTES.md` records decisions. **Every stage in `PLAN.md` lists the check IDs below as its Definition
+> `NOTES.md` records decisions. **The pass/fail counts and metric values these checks produce live in
+> `FACTS.md`** (the Verified-Facts Ledger) — reference them there, never restate the literal here.
+> **Every stage in `PLAN.md` lists the check IDs below as its Definition
 > of Done.** A stage is not "done" until its referenced checks pass — *run, not inspected*. Checks are
 > written **before** the matching code (test-first). Each has a stable ID (e.g. `CON2`, `EVAL3`,
 > `SEC1`) so `PLAN.md` can reference it without ambiguity.

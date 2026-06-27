@@ -2,8 +2,9 @@
 
 > How the **PM** (the persistent main Claude Code session) drives **swe-executer**
 > subagents through the stages in `PLAN.md` without Asaf in the routine loop.
-> `CLAUDE.md` = rules. `PLAN.md` = stage tracker. `QA_checklist.md` = verification.
-> `NOTES.md` = decision log. This file = the loop protocol that wires them together.
+> `STATE.md` = checkpoint (resume primitive). `CLAUDE.md` = rules. `PLAN.md` = stage tracker.
+> `QA_checklist.md` = verification. `FACTS.md` = Verified-Facts Ledger (the only home for numbers).
+> `NOTES.md` = decision log + handback pointers. This file = the loop protocol that wires them together.
 
 ---
 
@@ -18,13 +19,17 @@
 The PM does **not** exit and reactivate. It stays running and *spawns* a cold executer
 per stage; the executer's handback returns inline. That is what removes Asaf from the loop.
 
-## Shared memory (three layers)
+## Shared memory (the layers)
 
-- **Ledger (durable state):** `PLAN.md` (stage + status), `NOTES.md` (decisions/handbacks),
-  `QA_checklist.md` (how to verify). These persist across the whole project.
+- **Checkpoint (resume primitive):** `STATE.md` at repo root — a single overwritten snapshot the
+  PM reads first and rewrites at session-end (never appended). See `PM_Methodology_Prompt.md`.
+- **Ledger (durable state):** `PLAN.md` (stage + status), `FACTS.md` (Verified-Facts Ledger — the
+  only home for numbers), `NOTES.md` (decisions + handback **pointers**), `QA_checklist.md` (how to
+  verify). These persist across the whole project.
 - **Mailbox (per-stage message bus):**
   - `briefs/stage-<N>[-r<k>].md` — PM → executer (one file per attempt; `-r<k>` = retry k).
-  - `handbacks/stage-<N>[-r<k>].md` — executer → PM.
+  - `handbacks/stage-<N>[-r<k>].md` — executer → PM. **The raw handback payload stays here on
+    disk;** `NOTES.md` gets only a pointer line back to this file (Δ4, below).
 - **PM session memory (PM → next PM):** `PM_LOG.md` at repo root — a `[BACKEND]`-tagged
   `SESSION START` entry at the start of every PM session and a `SESSION END / HANDOFF` entry at
   the end (the non-negotiable ritual in `PM_Methodology_Prompt.md`). This is what lets a fresh
@@ -46,8 +51,13 @@ loop:
 
     REVIEW (PM does this itself, does not trust the handback blindly):
       - re-run / spot-check the stage's QA check IDs
-      - verify any number against the source data file
+      - verify any number against the source data file (record it in FACTS.md; NOTES/PLAN point to it)
       - confirm import-safety / no-eval / no-framework / catalog-by-name still hold
+      - VERIFIER-INDEPENDENCE (anti self-grading): inspect the diff — did the executer weaken,
+        delete, loosen, or `xfail` any EXISTING QA check / test / fixture that grades this stage?
+        A retry diff that touches only `tests/` and not `app/` is PRESUMED test-weakening. Re-run
+        the failing check at the PRE-EDIT revision to confirm the CODE (not the test) changed.
+        Any such test modification -> path A (HALT). (Adding brand-new tests is fine.)
 
     REVIEWER GATE (only if this stage TOUCHES A GRADED CONTRACT — see trigger list below):
       - spawn a swe-reviewer subagent, prompt = "Review the brief at briefs/stage-<current>...
@@ -62,11 +72,15 @@ loop:
     decide:
       A) handback has DECISION-NEEDED, or stage needs an open-question/secret,
          or it requests a tool-signature / schema / policy-constant / loop-contract /
-         graded-literal change:
-             -> update PLAN/NOTES, **HALT and ask Asaf**          [decision gate]
+         graded-literal change, OR the diff weakens/deletes/loosens/xfails an EXISTING
+         graded QA check/test/fixture (including a tests-only retry diff — see REVIEW):
+             -> update PLAN/NOTES, **HALT and ask Asaf**   [decision / verifier-independence gate]
       B) QA clean:
-             -> mark stage ✅ in PLAN.md; append handback to NOTES.md;
-                current = next stage; attempt = 0; continue
+             -> record any verified number in FACTS.md; mark stage ✅ in PLAN.md;
+                append only a POINTER line to NOTES.md:
+                  `Stage <N> ✅ — handbacks/stage-<N>.md · verdict <APPROVE> · commit <sha>`
+                (the raw payload stays on disk in handbacks/, never pasted into NOTES.md);
+                overwrite STATE.md; current = next stage; attempt = 0; continue
       C) QA failed, OR reviewer returned CHANGES-REQUIRED:
              attempt += 1
              if attempt < 2: write briefs/stage-<current>-r<attempt>.md with
@@ -88,6 +102,10 @@ The PM auto-advances every clean stage. It **halts and asks Asaf only** on:
 2. **Contract-change request** — a tool signature, JSON schema, policy constant, the loop
    contract, or a graded literal would have to change.
 3. **Second consecutive QA failure** on the same stage (1 auto-retry, then halt).
+4. **Test-weakening (verifier-independence)** — the executer weakened, deleted, loosened, or
+   `xfail`ed an existing graded check/test/fixture, or a retry diff touched **only** `tests/` and not
+   `app/`. The PM presumes self-grading, re-runs the check at the pre-edit revision, and halts. An
+   execution agent never grades its own stage by editing the check that grades it.
 
 Everything else proceeds autonomously.
 
@@ -144,6 +162,13 @@ what must change; keep the rest.)
 
 Defined in `.claude/agents/swe-executer.md` and mirrors `CLAUDE.md` §12 / `PLAN.md`
 "Standard stage handback format". Item 5 **DECISION-NEEDED** is the halt trigger.
+
+**Pointer, not copy (Δ4).** The executer's full handback payload is written to
+`handbacks/stage-<N>[-r<k>].md` and **stays there on disk**. The PM does **not** paste it into
+`NOTES.md`; it appends only a one-line pointer —
+`Stage <N> ✅ — handbacks/stage-<N>.md · verdict <APPROVE> · commit <sha>`. Any verified number
+from the handback is recorded once in `FACTS.md`; the pointer and the ledger replace the copy, so
+`NOTES.md` stays lightweight and nothing drifts.
 
 ---
 

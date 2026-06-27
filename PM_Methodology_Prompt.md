@@ -84,7 +84,27 @@ Each stage follows this loop:
 
 Do not advance to stage N+1 until stage N is confirmed clean. This is the most important rule.
 
-At the end of every session, the coding agent appends a handback entry to `notes.md` and the PM updates stage statuses in `plan.md`. A new session starts by reading `CLAUDE.md` → `plan.md` → `notes.md`, in that order.
+### Verifier-Independence (anti self-grading) — a hard safety boundary
+
+A stage is graded by its checks. An agent that can *edit those checks* can grade itself. So:
+
+- **Core rule:** an execution agent/subagent may **never weaken, delete, loosen, or `xfail` an
+  existing QA check, test, or fixture that grades its own stage.** The check is the contract; the code
+  bends to the check, not the reverse.
+- **Any test modification = an immediate `DECISION-NEEDED` halt to Asaf.** Adding *new* tests is fine;
+  touching an existing graded check is a halt, never a self-approved change.
+- **Tests-only retry ⇒ presume test-weakening.** If a retry diff touches only `tests/` and not the
+  application code (`app/`), the PM presumes the executer weakened the check to go green and **halts
+  execution instantly.**
+- **Re-run at the pre-edit revision.** Before accepting *any* test change, the PM re-runs the failing
+  check at the **pre-edit revision** to verify it was the **code** that changed to pass — not the
+  test that changed to stop failing.
+
+At the end of every session, the coding agent's stage handback is written to disk under `handbacks/`
+and only a **pointer line** is appended to `NOTES.md` (verified numbers live in `FACTS.md`); the PM
+updates stage statuses in `PLAN.md` after its own verification. A new session starts from `STATE.md`
+(reconciled against git + the live suite), dropping to `PLAN.md` / `NOTES.md` only if `STATE.md` is
+insufficient (see the Session Begin/End Ritual).
 
 ---
 
@@ -106,17 +126,39 @@ This is the single most important quality rule:
 
 If the report or output contains a quantitative claim, verify it by directly querying the data file (CSV, database, log, etc.) with code before confirming it. Stale numbers from earlier drafts or intermediate files cause cascading errors that are expensive to fix later.
 
-When a number appears in multiple places in a document, update **all instances** together.
+### One source of truth for verified numbers (`FACTS.md`)
+
+A number that lives in five files drifts in five files. So a hard number/metric lives in **exactly
+one place — the Verified-Facts Ledger, `FACTS.md`.** Every other file (`PLAN.md` status cells,
+`NOTES.md` / `PM_LOG.md` entries, `STATE.md`'s re-verify snapshot, scripts, the report) **references
+the fact by name/pointer and never restates the literal value.** When the value changes, you edit one
+row in `FACTS.md`; the pointers don't move. (`STATE.md`'s `Live-truth` line is the one allowed
+*restatement*, and it is explicitly labelled "re-verify, don't trust" — a convenience snapshot, not an
+authority.)
+
+A fact enters the ledger only once it has been **verified by running its source-of-truth command** —
+never copied from a draft. The canonical ledger format:
+
+| Fact | Value | Source-of-truth command | Verified | Commit |
+|---|---|---|---|---|
+| offline suite | X pass / Y skip | `make test` | YYYY-MM-DD | sha |
+
+When a number genuinely must appear outside the ledger (e.g. a one-time report), re-query its
+source-of-truth command at write time and update the ledger row in the same pass — never leave two
+live copies to drift apart.
 
 ---
 
 ## Session Continuity
 
 **Normal sessions:** No separate handoff document. At the end of every session:
-- The coding agent appends a handback entry to `notes.md` (DoD, decisions, blockers).
-- You update `plan.md` stage statuses.
+- The coding agent writes its stage handback to disk under `handbacks/` and appends only a
+  **pointer line** to `NOTES.md` (DoD verdict + commit; the raw payload stays on disk).
+- You update `PLAN.md` stage statuses and **overwrite `STATE.md`**.
 
-A new session starts by reading `CLAUDE.md` → `plan.md` → `notes.md`. Those three files together contain everything a fresh agent needs. This is the default.
+A new session starts from **`STATE.md`** (reconciled against `git` + the live suite), falling back to
+`PLAN.md` / `NOTES.md` / `CLAUDE.md` only if the checkpoint is insufficient. Those files together
+contain everything a fresh agent needs. This is the default.
 
 **When to produce a `HANDOFF.md`:** Only in two situations:
 1. You are bringing in a fundamentally different agent (e.g., a reviewer or a new specialist) who needs a curated summary rather than the raw log.
@@ -151,20 +193,48 @@ reconstructs state from scratch:
 
 | Layer | File(s) | Owner → reader | Holds |
 |---|---|---|---|
+| **Checkpoint** | **`STATE.md`** | **PM (overwrite)** | **the single live snapshot — the primary resume primitive** |
 | Rules | `CLAUDE.md` | permanent | how work must be done |
 | Stage ledger | `PLAN.md` (+ any per-workstream plan) | PM | **stage status = the progress ledger** |
 | Verification | `QA_checklist.md` | PM / executer | how each stage is proven |
-| Decisions + stage handbacks | `NOTES.md` | executer → PM | *why*; per-stage handback |
+| **Verified-facts ledger** | **`FACTS.md`** | **PM** | **the ONLY place a hard number/metric lives** |
+| Decisions + stage handbacks | `NOTES.md` | executer → PM | *why*; per-stage handback **pointer** (not the payload) |
 | **PM session continuity** | **`PM_LOG.md`** | **PM → next PM** | what a whole PM session did + the handoff |
 
 - The **plan file's status column IS the durable ledger**: a new PM reads it to see which
   stages are ✅ vs not, and resumes at the first non-✅ stage. (This is the one persistence
   mechanism that survives any context loss.)
-- **Resume order:** `PM_LOG.md` (latest entry) → the plan's stage status → the latest
-  `NOTES.md` entries. Those three tell you what happened, where you are, and why.
-- `PM_LOG.md` is **distinct from `NOTES.md`**: NOTES holds decisions + stage-level handbacks
-  (executer→PM); PM_LOG holds session-level PM→PM handoffs (so a PM can be swapped mid-project
-  without losing the thread). Don't duplicate one into the other.
+- **Resume order:** **`STATE.md`** → reconcile it against `git status` / `git log` + the live
+  test count → then `PM_LOG.md` / `NOTES.md` **only if `STATE.md` is insufficient**. `STATE.md`
+  replaces "read the latest `PM_LOG.md` entry" as the primary resume primitive (see the
+  Checkpoint Layer below). The plan's stage status remains the durable ledger that survives a
+  lost or stale `STATE.md`.
+- `PM_LOG.md` is **distinct from `NOTES.md`**: NOTES holds decisions + stage-level handback
+  *pointers* (executer→PM); PM_LOG holds session-level PM→PM handoffs (so a PM can be swapped
+  mid-project without losing the thread). Don't duplicate one into the other.
+
+### Memory Management Architecture → Checkpoint Layer (`STATE.md`)
+
+`STATE.md` is a **small, dynamic, single-snapshot** file: one screenful that says where the
+project is *right now*. It is **completely overwritten every session-end — never appended** (it
+has no history; the append-only ledgers `PM_LOG.md` / `NOTES.md` keep history). It is the
+**primary resume primitive**: it replaces "read the latest `PM_LOG.md` entry" as the first thing
+a fresh PM reads. Its numbers are a **convenience snapshot you re-verify, not a source of truth**
+— the source of truth for any number is `FACTS.md`, and the durable progress ledger is the
+plan's stage status. Overwrite `STATE.md` as the last act of every session (and on any halt).
+
+Default template (overwrite this whole file each session-end; never append):
+
+```markdown
+# STATE.md — current checkpoint (OVERWRITE every session-end; never append)
+Updated: <YYYY-MM-DD HH:MM> · Workstream: <tag> · HEAD: <git short-sha> (<tag>)
+Current stage: <N — name> · Status: <⬜/🔄/🟡/⚠️/✅>
+Resume at: <the one concrete next action>
+Live-truth (re-verify, don't trust): suite <N green> via `<cmd>`; spend <$x/$cap>; <key constants>
+Open halts / decisions pending Asaf: <bullet list or "none">
+Last 3 superseded decisions (tombstones): <one line each, e.g. "Realtime brain → standard pipeline (2026-06-24)">
+Disk-vs-ledger watch: <anything on disk not yet in the ledger, e.g. "38 untracked receipts/">
+```
 
 ---
 
@@ -174,13 +244,19 @@ Every PM session brackets its work with a shared-memory handoff. **Every session
 exceptions — a skipped handoff silently breaks the next PM.**
 
 **At the START of every session:**
-1. Read `PM_Methodology_Prompt.md` (this file), then the spine in the read order above.
-2. Read the **latest `PM_LOG.md` entry** for your workstream and the plan's stage status.
+1. Read `PM_Methodology_Prompt.md` (this file), then **`STATE.md`** (the checkpoint — your first
+   read of project state).
+2. **Reconcile `STATE.md` against reality, don't trust it:** check `git status` / `git log` and
+   re-run the live test count; the plan's stage status is the durable ledger. Drop to
+   `PM_LOG.md` (latest entry) / `NOTES.md` **only if `STATE.md` is missing, stale, or
+   insufficient** to resume.
 3. **Append a `SESSION START` entry to `PM_LOG.md`** (template below) before doing any work.
 
 **At the END of every session (also on a halt):**
-4. **Append a `SESSION END / HANDOFF` entry to `PM_LOG.md`** — what landed, verified numbers,
-   current status, the one concrete next action, and anything to watch out for.
+4. **Append a `SESSION END / HANDOFF` entry to `PM_LOG.md`** — what landed, current status, the
+   one concrete next action, and anything to watch out for (verified numbers live in `FACTS.md`;
+   reference them, don't restate).
+5. **Overwrite `STATE.md`** with the fresh checkpoint (never append — replace the whole file).
 
 Entry templates (tag every entry with your workstream):
 
@@ -199,6 +275,30 @@ Watch out for / open: <risks, halts, decisions pending>
 
 The PM owns `PM_LOG.md`. Executer/reviewer subagents never write to it.
 
+### Compaction Rule (MANDATORY)
+
+Append-only files rot: superseded narratives, stale constants, and raw tool dumps pile up until a
+fresh PM trusts a dead number. **Compact the context before proceeding** whenever any of these fires:
+
+- a stage is marked **✅**, or
+- `PM_LOG.md` grows past **~400 lines**, or
+- `NOTES.md` grows past **~500 lines**.
+
+Compaction has four tenets:
+
+1. **Tombstone reversals.** Any decision later reversed collapses to a single line:
+   `SUPERSEDED <date>: <old> → <new> (why)`. **Delete the original multi-paragraph narrative** from
+   the live file — the one-line tombstone is all that survives in the live spine.
+2. **Clear re-fetchable detail.** Once a stage's metrics are in the ledger (`FACTS.md`), **delete the
+   raw tool/QA output** from the handback note and keep only the pointer — the commit + the green
+   count. Anything you can re-run is not worth storing.
+3. **Archive, don't hoard.** Move raw superseded log lines to `PM_LOG_archive.md` /
+   `NOTES_archive.md` (git-tracked, **never read on resume**). History is preserved without bloating
+   the files a fresh PM must read.
+4. **Single live location.** A decision/constant lives in **exactly one place**. After compacting,
+   **grep the spine** to eliminate stale constants (e.g. a dead model name, an old cap) — if a value
+   appears in two live files, one of them is wrong by definition.
+
 ---
 
 ## Red Flags — Rationalizations to Refuse
@@ -214,6 +314,11 @@ you cannot reason your way around it:
   against the source before reporting them.
 - *"I'll mark the stage ✅ on the executer's word."* → **Refuse.** You run the checks yourself.
 - *"I'll just decide this contract change myself to keep moving."* → **Refuse.** Halt and ask Asaf.
+- *"The test was flaky / too strict, the executer just relaxed it to go green."* → **Refuse.** An
+  agent **may not grade its own stage by weakening the check.** Any test/QA/fixture edit on a graded
+  stage is a `DECISION-NEEDED` halt (see Verifier-Independence under Stage Workflow).
+- *"The retry only touched `tests/`, so it must be fine."* → **Refuse.** A tests-only retry diff is
+  **presumed test-weakening** — halt and re-run the original check at the pre-edit revision first.
 
 ---
 
@@ -239,12 +344,15 @@ A well-run project under this methodology has:
 This project is a **<one-line description of the assignment>**. The deliverable is
 **<e.g. a single reproducible Jupyter notebook / a Python package / a report+notebook>**.
 
-**Spine files (at the repo root):** `CLAUDE.md` (rules) · `PLAN.md` (stage tracker) ·
-`QA_checklist.md` (verification blueprint) · `NOTES.md` (decisions + handbacks) ·
+**Spine files (at the repo root):** `STATE.md` (checkpoint — the resume primitive) · `CLAUDE.md`
+(rules) · `PLAN.md` (stage tracker) · `QA_checklist.md` (verification blueprint) · `FACTS.md`
+(Verified-Facts Ledger — the one home for numbers) · `NOTES.md` (decisions + handback pointers) ·
 `PM_LOG.md` (PM→PM session log) · `ORCHESTRATION.md` (the autonomous loop, optional).
 
-**Read order at session start:** `PM_Methodology_Prompt.md` → latest `PM_LOG.md` entry →
-`CLAUDE.md` → `PLAN.md` → `QA_checklist.md` → `NOTES.md` (→ `ORCHESTRATION.md` if using the loop).
+**Read order at session start:** `PM_Methodology_Prompt.md` → **`STATE.md`** (reconcile vs `git` +
+the live suite) → then, only if the checkpoint is insufficient: `CLAUDE.md` → `PLAN.md` →
+`QA_checklist.md` → `FACTS.md` → `NOTES.md` → latest `PM_LOG.md` entry (→ `ORCHESTRATION.md` if using
+the loop).
 
 **Workstreams:** <single-track, or list the lanes and which files each owns>.
 
@@ -255,7 +363,8 @@ entry, then continue from the first unfinished stage.
 
 ```
 You are my PM for this project. Read PM_Methodology_Prompt.md verbatim to understand your role,
-budget rules, and memory architecture. Then follow its Session begin/end ritual: read the spine +
-the latest PM_LOG.md entry, write a SESSION START entry, do the work, and write a SESSION END /
-HANDOFF entry before you stop.
+budget rules, and memory architecture. Then follow its Session begin/end ritual: read STATE.md and
+reconcile it against git + the live test count (drop to PLAN.md/NOTES.md/PM_LOG.md only if it's
+insufficient), write a SESSION START entry, do the work, then write a SESSION END / HANDOFF entry
+and overwrite STATE.md before you stop.
 ```

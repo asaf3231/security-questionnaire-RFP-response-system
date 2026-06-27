@@ -10,13 +10,17 @@ Maintained by: Asaf
 
 ## How to use this file
 - Work one stage at a time. Do not advance until the current stage's Definition of Done is satisfied.
-- Read order for any session: `PM_LOG.md` (latest) → `CLAUDE.md` → `PLAN.md` → `QA_checklist.md` → `NOTES.md`.
+- Read order for any session: `STATE.md` (the checkpoint, reconciled vs `git` + the live suite) →
+  then, only if it's insufficient: `CLAUDE.md` → `PLAN.md` → `QA_checklist.md` → `FACTS.md` → `NOTES.md`.
 - **Every DoD item references a check ID in `QA_checklist.md`.** A stage is done only when every
   referenced check **passes — verified by running it**, not by inspection.
+- **Numbers live in `FACTS.md` only.** These status cells reference a verified fact by name; going
+  forward they do not restate the literal value (historical cells are left as a record).
 - Non-trivial code is drafted as labelled copy-pasteable blocks for review, then landed. Always state
   *drafted only* vs *written and test-verified*.
-- After each stage, append a handback to `NOTES.md`. The **PM** updates the stage status after its own
-  verification — never the executer.
+- After each stage, the executer's handback is written to disk under `handbacks/` and only a **pointer
+  line** is appended to `NOTES.md` (not the raw payload). The **PM** updates the stage status after its
+  own verification — never the executer — and overwrites `STATE.md`.
 
 Status values: ⬜ Not started · 🔄 In progress · 🟡 Awaiting verification · ⚠️ Blocked · ✅ Complete
 

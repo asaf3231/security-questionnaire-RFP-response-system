@@ -9,9 +9,10 @@ test/eval suite + scripts) **and a video explanation** — see §0.2. *(No Jupyt
 Maintained by: Asaf
 
 > Read this file at the start of every Claude Code session before writing or editing any code. It
-> defines the **permanent rules**. Execution status belongs in `PLAN.md`; the verification blueprint
-> belongs in `QA_checklist.md`; decisions and verified facts belong in `NOTES.md`; PM→PM session
-> handoff belongs in `PM_LOG.md`.
+> defines the **permanent rules**. The current checkpoint is `STATE.md`; execution status belongs in
+> `PLAN.md`; the verification blueprint belongs in `QA_checklist.md`; **verified numbers belong in
+> `FACTS.md`** (the only place they live); decisions and handback pointers belong in `NOTES.md`; PM→PM
+> session handoff belongs in `PM_LOG.md`.
 
 ---
 
@@ -20,22 +21,26 @@ Maintained by: Asaf
 This project uses the lightweight file-based PM workflow:
 
 ```text
+STATE.md                 = current checkpoint — the single overwritten resume snapshot (read first)
 CLAUDE.md                = permanent rules and conventions  (this file)
 PLAN.md                  = current stage tracker and Definition of Done
 QA_checklist.md          = the Test-Driven-Development blueprint (every DoD points here)
-NOTES.md                 = decisions, verified facts, open questions, handbacks
+FACTS.md                 = Verified-Facts Ledger — the ONLY place a hard number/metric lives
+NOTES.md                 = decisions, open questions, handback pointers
 PM_LOG.md                = PM→PM session handoff log (begin/end ritual)
 PM_Methodology_Prompt.md = how the PM works (role, budget rules, memory architecture)
 ORCHESTRATION.md         = the autonomous PM↔executer loop protocol (optional)
 ```
 
 **PM session ritual (non-negotiable):** every PM session opens by reading `PM_Methodology_Prompt.md`
-+ the latest `PM_LOG.md` entry, writes a `SESSION START` entry to `PM_LOG.md` before working, and
-writes a `SESSION END / HANDOFF` entry before stopping. Only the PM writes `PM_LOG.md`.
++ **`STATE.md`** (the checkpoint), reconciles it against `git` + the live suite, writes a `SESSION
+START` entry to `PM_LOG.md` before working, and writes a `SESSION END / HANDOFF` entry **and
+overwrites `STATE.md`** before stopping. Only the PM writes `PM_LOG.md` and `STATE.md`.
 
-At the start of every Claude Code session: read `CLAUDE.md` → `PLAN.md` → `QA_checklist.md` →
-`NOTES.md`, identify the current stage, work **only** on that stage, stop at the stage boundary and
-report back. Do not silently continue into the next stage.
+At the start of every Claude Code session: read **`STATE.md`** first (reconcile vs `git` + the live
+test count), dropping to `CLAUDE.md` → `PLAN.md` → `QA_checklist.md` → `FACTS.md` → `NOTES.md` only if
+the checkpoint is insufficient; identify the current stage, work **only** on that stage, stop at the
+stage boundary and report back. Do not silently continue into the next stage.
 
 Do **not** change any of the following without surfacing the decision to Asaf first: a named constant
 in §9, a tool/function signature, the voice-provider interface, the `DISCLOSURE_LINE` /
@@ -47,10 +52,14 @@ and wait for Asaf to approve it.
 
 ### 0.1 Autonomous PM ↔ executer mode (`ORCHESTRATION.md`)
 When run under `ORCHESTRATION.md`, the PM performs the stage-boundary review and may auto-advance clean
-stages by spawning a cold `swe-executer` per stage. The human gate (Asaf) narrows to three triggers:
+stages by spawning a cold `swe-executer` per stage. The human gate (Asaf) narrows to four triggers:
 (1) a required decision / open-question / secret; (2) a request to change a graded contract (above);
-(3) a second consecutive QA failure on a stage. The executer never crosses its stage boundary or
-changes a contract — it surfaces those as `DECISION-NEEDED`, which the PM converts into a halt.
+(3) a second consecutive QA failure on a stage; (4) **verifier-independence** — the executer
+weakened/deleted/loosened/`xfail`ed an existing graded check/test/fixture, or a retry diff touched
+**only** `tests/` and not `app/` (presumed test-weakening). The executer never crosses its stage
+boundary, changes a contract, or grades itself by editing the check that grades it — it surfaces those
+as `DECISION-NEEDED`, which the PM converts into a halt (the PM re-runs the check at the pre-edit
+revision to confirm the code, not the test, changed).
 
 ### 0.2 The two deliverables
 1. **The service repo** — graded on the code: it must run from a clean checkout, be import-safe, place
