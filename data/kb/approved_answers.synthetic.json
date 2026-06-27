@@ -1,0 +1,146 @@
+[
+  {
+    "chunk_id": "kb-001",
+    "question": "Does your platform support encryption of data at rest?",
+    "answer": "Yes. All customer data is encrypted at rest using AES-256. Encryption keys are managed via our dedicated key management service and rotated quarterly. This applies to all persistent storage layers including databases and object storage.",
+    "source": "security-whitepaper-v3.pdf",
+    "sensitivity": "public",
+    "topic_tags": ["infrastructure", "encryption", "data-handling"],
+    "approved": true
+  },
+  {
+    "chunk_id": "kb-002",
+    "question": "What encryption is used for data in transit?",
+    "answer": "All data in transit is protected using TLS 1.2 or higher. We enforce strict TLS on all API endpoints and internal service-to-service communication. Older protocol versions (TLS 1.0, 1.1) are disabled.",
+    "source": "security-whitepaper-v3.pdf",
+    "sensitivity": "public",
+    "topic_tags": ["infrastructure", "encryption", "network-security"],
+    "approved": true
+  },
+  {
+    "chunk_id": "kb-003",
+    "question": "Do you perform regular penetration testing?",
+    "answer": "We conduct annual third-party penetration tests performed by accredited security firms. Results are reviewed by our Security team and critical findings are remediated within 30 days. Summaries are available to enterprise customers under NDA.",
+    "source": "security-whitepaper-v3.pdf",
+    "sensitivity": "public",
+    "topic_tags": ["security", "compliance", "vulnerability-management"],
+    "approved": true
+  },
+  {
+    "chunk_id": "kb-004",
+    "question": "What is your data retention policy?",
+    "answer": "Customer data is retained for the duration of the subscription plus 90 days after contract termination. Upon customer request or at end of retention period, data is securely deleted using NIST 800-88 guidelines. Backup media is overwritten within 30 days.",
+    "source": "data-handling-policy-v2.pdf",
+    "sensitivity": "public",
+    "topic_tags": ["data-handling", "compliance", "privacy"],
+    "approved": true
+  },
+  {
+    "chunk_id": "kb-005",
+    "question": "Are you SOC 2 Type II certified?",
+    "answer": "Yes. We hold a current SOC 2 Type II certification covering the Security, Availability, and Confidentiality trust service criteria. Our most recent audit was completed in Q4 of last year and the report is available to qualified prospects under NDA.",
+    "source": "compliance-overview-v1.pdf",
+    "sensitivity": "public",
+    "topic_tags": ["compliance", "security", "certification"],
+    "approved": true
+  },
+  {
+    "chunk_id": "kb-006",
+    "question": "Does your platform support single sign-on (SSO)?",
+    "answer": "Yes. We support SAML 2.0 and OIDC-based SSO integration with all major identity providers including Okta, Azure AD, and Google Workspace. SSO configuration is available on enterprise plans and can be set up by your IT administrator using our integration guide.",
+    "source": "product-security-faq-v4.pdf",
+    "sensitivity": "public",
+    "topic_tags": ["infrastructure", "identity", "access-control"],
+    "approved": true
+  },
+  {
+    "chunk_id": "kb-007",
+    "question": "Do you have a formal incident response plan?",
+    "answer": "Yes. We maintain a documented Incident Response Plan (IRP) aligned with NIST SP 800-61. Our Security Operations team follows defined playbooks for detection, containment, eradication, and recovery. Affected customers are notified within 72 hours of a confirmed breach as required by applicable regulations.",
+    "source": "incident-response-plan-v2.pdf",
+    "sensitivity": "public",
+    "topic_tags": ["security", "compliance", "incident-response"],
+    "approved": true
+  },
+  {
+    "chunk_id": "kb-008",
+    "question": "How do you manage access control for employees?",
+    "answer": "We enforce role-based access control (RBAC) with least-privilege principles. All production access requires multi-factor authentication (MFA). Access reviews are conducted quarterly. Privileged access management (PAM) tools gate all administrative operations and create an audit trail.",
+    "source": "access-control-policy-v3.pdf",
+    "sensitivity": "public",
+    "topic_tags": ["access-control", "security", "infrastructure"],
+    "approved": true
+  },
+  {
+    "chunk_id": "kb-009",
+    "question": "Where is customer data stored geographically?",
+    "answer": "By default, customer data is stored in the United States (AWS us-east-1 and us-west-2). Enterprise customers may elect EU or APAC data residency at contract time. Data does not egress from the selected region except for backup replication to a secondary region within the same geography.",
+    "source": "data-handling-policy-v2.pdf",
+    "sensitivity": "internal",
+    "topic_tags": ["infrastructure", "data-handling", "privacy", "compliance"],
+    "approved": true
+  },
+  {
+    "chunk_id": "kb-010",
+    "question": "What are your subprocessor and vendor management practices?",
+    "answer": "All third-party subprocessors are assessed before onboarding via a formal vendor risk review covering security controls, compliance certifications, and contractual data-processing obligations. Our current subprocessor list is published on our Trust Center. Material changes are communicated to enterprise customers with 30 days advance notice.",
+    "source": "vendor-management-policy-v1.pdf",
+    "sensitivity": "internal",
+    "topic_tags": ["compliance", "data-handling", "vendor-management"],
+    "approved": true
+  },
+  {
+    "chunk_id": "kb-011",
+    "question": "Do you have cyber liability insurance?",
+    "answer": "Yes. We carry cyber liability insurance with coverage limits reviewed annually in partnership with our legal and finance teams. Specific coverage amounts and carrier details are disclosed to enterprise customers under executed NDA as part of the procurement process.",
+    "source": "legal-compliance-faq-v2.pdf",
+    "sensitivity": "restricted",
+    "topic_tags": ["legal", "compliance", "security"],
+    "approved": true
+  },
+  {
+    "chunk_id": "kb-012",
+    "question": "What is your SLA for uptime?",
+    "answer": "Our standard SLA guarantees 99.9% monthly uptime for production environments. Enterprise plans include a 99.95% SLA. We publish a real-time status page and provide root-cause analyses for incidents exceeding 15 minutes of downtime.",
+    "source": "sla-v3.pdf",
+    "sensitivity": "public",
+    "topic_tags": ["infrastructure", "availability", "compliance"],
+    "approved": true
+  },
+  {
+    "chunk_id": "kb-013",
+    "question": "Does your system support multi-factor authentication?",
+    "answer": "Yes. MFA is supported for all user accounts and is mandatory for all administrative and privileged access. Supported MFA methods include TOTP authenticator apps, hardware security keys (FIDO2/WebAuthn), and push notifications via supported identity providers.",
+    "source": "product-security-faq-v4.pdf",
+    "sensitivity": "public",
+    "topic_tags": ["access-control", "security", "identity"],
+    "approved": true
+  },
+  {
+    "chunk_id": "kb-014",
+    "question": "What is your vulnerability disclosure policy?",
+    "answer": "This record is superseded — see kb-003 for current penetration testing information.",
+    "source": "legacy-security-docs-v1.pdf",
+    "sensitivity": "public",
+    "topic_tags": ["security", "vulnerability-management"],
+    "approved": false
+  },
+  {
+    "chunk_id": "kb-015",
+    "question": "How do you handle data subject access requests (DSARs)?",
+    "answer": "We provide a self-service data subject request portal for end-users. Enterprise customers may submit DSARs on behalf of their users via our DPA. We respond to all verified DSARs within the legally required timeframe (30 days under GDPR, 45 days under CCPA). Requests are logged and tracked for compliance reporting.",
+    "source": "privacy-policy-v5.pdf",
+    "sensitivity": "public",
+    "topic_tags": ["privacy", "compliance", "data-handling"],
+    "approved": true
+  },
+  {
+    "chunk_id": "kb-016",
+    "question": "Do you indemnify customers for security breaches caused by your platform?",
+    "answer": "Indemnification terms vary by contract tier and are negotiated with legal counsel on enterprise agreements. Our standard terms include limited indemnification for breaches directly caused by our platform's failure to meet stated security commitments. Specific indemnification language is available from our legal team under an executed MSA.",
+    "source": "legal-compliance-faq-v2.pdf",
+    "sensitivity": "restricted",
+    "topic_tags": ["legal", "compliance", "security"],
+    "approved": true
+  }
+]

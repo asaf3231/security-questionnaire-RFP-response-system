@@ -1,0 +1,38 @@
+[
+  {
+    "chunk_id": "doc-001",
+    "question": null,
+    "answer": "Our platform is built on a defense-in-depth security architecture. Security controls are layered across network, application, and data tiers. The platform is deployed on SOC 2-certified cloud infrastructure (AWS) in isolated VPCs with no direct public internet access to backend systems.",
+    "source": "product-security-overview.pdf",
+    "sensitivity": "public",
+    "topic_tags": ["infrastructure", "security", "architecture"],
+    "approved": true
+  },
+  {
+    "chunk_id": "doc-002",
+    "question": null,
+    "answer": "All application-layer secrets (API keys, database credentials, signing keys) are stored in a dedicated secrets management system with automatic rotation. Secrets are never stored in source code, configuration files, or environment variables on shared systems. Access to secrets is logged and audited.",
+    "source": "product-security-overview.pdf",
+    "sensitivity": "public",
+    "topic_tags": ["infrastructure", "security", "access-control"],
+    "approved": true
+  },
+  {
+    "chunk_id": "doc-003",
+    "question": null,
+    "answer": "Our software development lifecycle (SDLC) includes mandatory security review gates at design, implementation, and pre-release stages. Static analysis (SAST) and dependency vulnerability scanning (SCA) are integrated into CI/CD pipelines. Critical security defects block releases and are tracked to remediation.",
+    "source": "product-security-overview.pdf",
+    "sensitivity": "internal",
+    "topic_tags": ["security", "infrastructure", "compliance"],
+    "approved": true
+  },
+  {
+    "chunk_id": "doc-004",
+    "question": null,
+    "answer": "Employee security training is mandatory for all staff at onboarding and annually thereafter. Phishing simulation exercises are conducted quarterly. Security awareness metrics are tracked and reported to leadership. Employees with privileged access undergo additional role-specific security training.",
+    "source": "product-security-overview.pdf",
+    "sensitivity": "public",
+    "topic_tags": ["security", "compliance", "access-control"],
+    "approved": true
+  }
+]

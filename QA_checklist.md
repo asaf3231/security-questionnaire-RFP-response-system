@@ -29,7 +29,7 @@ Maintained by: Asaf
 | `ENV1` | Fresh-venv install | `python -m venv .venv && pip install -r requirements.txt` | Exit 0; all pins resolve |
 | `ENV2` | Every import is pinned | AST-scan every non-stdlib import in `app/`+`scripts/`; assert each appears in `requirements.txt` with `==` | No imported third-party module unpinned (incl. `rank_bm25`, `anthropic`, `pydantic`) |
 | `ENV3` | One-command clean run | `make test` from a fresh checkout with **no `.env`** | Suite green; **no network, no Claude client built, no call** |
-| `ENV4` | **Import-safety** | `python -c "import app.config, app.schema, app.kb, app.retrieval, app.context_stack, app.llm, app.draft, app.confidence, app.routing, app.state, app.audit, app.export, app.pipeline"` from an empty dir, no `.env`, no network | Exit 0; **zero** side effects (no client, no `.env` read, no `data/*` read, no file written); lazy singletons `None`. The single most important environment check |
+| `ENV4` | **Import-safety** | `python -c "import <the app.* modules that EXIST at the current stage>"` from an empty dir, no `.env`, no network. Modules are created as their stage lands (no premature stubs, §8), so the set grows per stage — **Stage 1: `app.config, app.schema, app.kb`**; the full 13-module set is re-proven as later modules land | Exit 0; **zero** side effects (no client, no `.env` read, no `data/*` read, no file written); lazy singletons `None`. The single most important environment check |
 
 **Shared fixtures**
 - `tmp_kb` — a small schema-valid `approved_answers.synthetic.json` (≥1 `public`, ≥1 `internal`/`restricted`, ≥1 `approved=False` non-retrievable, mixed `topic_tags`).

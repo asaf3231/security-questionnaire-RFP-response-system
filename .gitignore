@@ -1,0 +1,39 @@
+# Secrets — never commit
+.env
+
+# Virtual environment
+.venv/
+
+# Generated output artifacts (machine-local)
+exports/
+audit/
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# macOS metadata
+.DS_Store
+
+# Real / customer data — never commit
+# (only *.synthetic.* files are tracked)
+data/kb/approved_answers.json
+data/questionnaires/*.json
+!data/questionnaires/*.synthetic.json
+data/kb/docs/*.json
+!data/kb/docs/*.synthetic.json
+
+# IDE artifacts
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Pytest cache
+.pytest_cache/

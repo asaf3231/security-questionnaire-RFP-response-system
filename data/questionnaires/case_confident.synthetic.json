@@ -1,0 +1,20 @@
+{
+  "questionnaire_id": "q-confident-001",
+  "items": [
+    {
+      "item_id": "q-confident-001-i1",
+      "question": "Does your platform encrypt data at rest, and if so, what encryption standard do you use?",
+      "topic_tags": ["encryption", "infrastructure", "data-handling"]
+    },
+    {
+      "item_id": "q-confident-001-i2",
+      "question": "Is data in transit encrypted? What protocol versions are supported?",
+      "topic_tags": ["encryption", "infrastructure", "network-security"]
+    },
+    {
+      "item_id": "q-confident-001-i3",
+      "question": "Do you support multi-factor authentication for user accounts?",
+      "topic_tags": ["access-control", "security", "identity"]
+    }
+  ]
+}

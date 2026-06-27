@@ -46,7 +46,7 @@ Status values: ⬜ Not started · 🔄 In progress · 🟡 Awaiting verification
 | Stage | Name | DoD checks (`QA_checklist.md`) | Reviewer gate | Status |
 |---:|---|---|:---:|---|
 | 0 | Project setup & spine | meta (this file set) | — | ✅ Complete (Asaf green-lit 2026-06-27) |
-| 1 | Environment, secrets, config & synthetic inputs | `ENV1`–`ENV4`, `SEC1`–`SEC2`, `KB1`–`KB2`, `DATA1` | ✅ | 🔄 In progress (autonomous loop) |
+| 1 | Environment, secrets, config & synthetic inputs | `ENV1`–`ENV4`, `SEC1`–`SEC2`, `KB1`–`KB2`, `DATA1` | ✅ | ✅ Complete (2026-06-27; suite 39 green — see FACTS) |
 | 2 | KB chunks + deterministic retrieval (`rank_bm25`) | `RET1`–`RET3` | ✅ | ⬜ Not started |
 | 3 | Context Stack + draft generation + grounding | `CTX1`–`CTX4`, `SCHEMA1`, `DRAFT1`–`DRAFT2`, `GROUND1` | ✅ | ⬜ Not started |
 | 4 | Confidence + routing + state machine | `CONF1`–`CONF3`, `ROUTE1`–`ROUTE3`, `STATUS1`–`STATUS2` | ✅ | ⬜ Not started |
@@ -102,17 +102,21 @@ registry row + ≥1 QA mention; no stray literals; `Reference/` untouched), gree
 > half of `app/kb.py` lands here so data integrity is guaranteed **before** the Stage 2 retrieval
 > logic. The `rank_bm25` ranking half of `app/kb.py`/`retrieval.py` stays in Stage 2.*
 **Definition of Done (QA: `ENV1`–`ENV4`, `SEC1`–`SEC2`, `KB1`–`KB2`, `DATA1`):**
-- [ ] `ENV1`/`ENV2` — fresh venv installs; every third-party import pinned `==` (incl. `rank_bm25`,
-  `anthropic`, `pydantic`, `python-dotenv`, `pytest`); `DRAFT_MODEL` pinned (`OQ-1` resolved).
-- [ ] `ENV3`/`ENV4` — `make test` clean offline (no `.env`); all `app.*` modules import side-effect-free
-  from an empty cwd (lazy singletons `None`, no client, no `data/*` read).
-- [ ] `SEC1`/`SEC2` — no key/token in any tracked file or sample; `.env` gitignored; `.env.example`
-  placeholders only (`RULE_NO_SECRET`).
-- [ ] `KB1`/`DATA1` — synthetic KB, questionnaires, and policy-tags validate on load (missing field →
-  `ValueError`); only `approved==True` chunks retrievable; routing map references only `REVIEWER_QUEUES`.
-- [ ] `KB2` — no `data/*` value hardcoded in code/prompts (`LEAK3`).
-**Reviewer gate:** ✅ (constants, schema, `RULE_*` strings are graded contracts).
-**Status:** ⬜ Not started.
+- [x] `ENV1`/`ENV2` — fresh venv installs; every third-party import pinned `==` (24 pins, see FACTS);
+  `DRAFT_MODEL=claude-sonnet-4-6` pinned (`OQ-1` resolved).
+- [x] `ENV3`/`ENV4` — `make test` clean offline (no `.env`); existing `app.*` modules import
+  side-effect-free from a clean process (lazy `_claude_client` `None`); ENV4 proven progressively
+  per stage (Stage 1: config/schema/kb).
+- [x] `SEC1`/`SEC2` — no key/token in any tracked file or sample (PM-independent scan: zero real-key
+  shapes); `.env` gitignored; `.env.example` placeholder only (`RULE_NO_SECRET`).
+- [x] `KB1`/`DATA1` — KB/questionnaires/policy-tags validate on load (**strict explicit `ValueError`,
+  not `KeyError`** — Asaf emphasis); only `approved==True` retrievable; routing map ⊆ `REVIEWER_QUEUES`.
+- [x] `KB2` — no `data/*` value hardcoded in code/prompts (`LEAK3`).
+**Reviewer gate:** ✅ `/code-review` run — 1 Important finding (premature stub modules, CLAUDE §8)
+**fixed** via warm-agent correction; 2 minor `kb.py` findings deferred to Stage 2. SEC1 test was
+modified during the fix (regex precision) — PM scrutinized under verifier-independence, re-verified
+independently (no real secret masked), **accepted as a strengthening** (see `NOTES.md` D-S1).
+**Status:** ✅ Complete — PM-verified 2026-06-27; suite 39 green; committed as `stage-1-env` on `main`.
 
 ---
 

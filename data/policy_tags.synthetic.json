@@ -1,0 +1,22 @@
+{
+  "sensitivity_tags": ["public", "internal", "restricted"],
+  "high_risk_tags": ["legal", "security"],
+  "routing_map": {
+    "legal": "legal",
+    "security": "security",
+    "compliance": "security",
+    "privacy": "legal",
+    "vendor-management": "engineering",
+    "infrastructure": "engineering",
+    "access-control": "security",
+    "encryption": "security",
+    "identity": "engineering",
+    "certification": "gtm",
+    "availability": "engineering",
+    "data-handling": "security",
+    "architecture": "engineering",
+    "vulnerability-management": "security",
+    "network-security": "engineering",
+    "incident-response": "security"
+  }
+}

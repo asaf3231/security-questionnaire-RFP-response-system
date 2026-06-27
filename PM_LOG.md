@@ -57,3 +57,23 @@ Plan for this session: (1) commit the Stage 0 spine baseline on `main` + tag `st
 (2) write `briefs/stage-1.md`; (3) spawn a cold `general-purpose` executer (Sonnet); (4) PM re-runs
 `ENV*`/`SEC*`/`KB*`/`DATA1` + `make test` independently; (5) `/code-review` gate (graded contracts);
 (6) record FACTS, mark Stage 1, commit, and hand back to Asaf at the boundary. Do not advance to Stage 2.
+
+## 2026-06-27 12:05 — [BACKEND] SESSION END / HANDOFF
+Did: **Stage 0 committed** (`abb793a`, tag `stage-0-spine`). **Stage 1 executed via the autonomous
+loop and PM-verified ✅.** Cold `general-purpose` executer built the env/config/schema/kb + synthetic
+data + tests. PM independent QA: `make test` 39 green (re-run myself), ENV4 import-safe, SEC1 clean
+(my own independent scan — zero real-key shapes), KB1/DATA1 **strict `ValueError`** confirmed (Asaf
+emphasis). **`/code-review` gate:** 1 Important finding (10 premature stub modules vs CLAUDE §8) →
+fixed via a **warm-agent SendMessage** (cheaper than a cold respawn): stubs removed, app/ now only
+config/schema/kb; ENV4 made progressive in the spine + test. 2 minor kb.py findings deferred to Stage
+2. **Verifier-independence event:** the executer also tightened the `SEC1` regex (its own handback
+prose had tripped the loose heuristic); PM re-ran at the pre-edit revision + scanned independently →
+**strengthening, no secret masked → accepted** (NOTES D-S1). Verified numbers in FACTS (suite/ENV4/
+KB-size/deps). Committed as `stage-1-env`. Handback NOT pasted here — pointer in NOTES.
+Status now: ✅ Stage 1 complete, committed. Suite 39 green. **HALTED at the Stage 1 boundary per Asaf.**
+Next PM should: get Asaf's go-ahead, then brief **Stage 2** (KB chunks + `rank_bm25` retrieval + tag
+filter + Recall@K), folding in the two deferred kb.py follow-ups. Stage 2 touches a graded contract
+(retrieval signature + BM25 params) → reviewer gate fires.
+Watch out for / open: SEC1 test edit accepted as a strengthening (flag to Asaf for visibility — revert
+if undesired); system python is 3.10 (too old) — venv uses 3.12.4, so `make test` needs the venv
+active; Recall@K fixtures (`fixtures/eval/`) get seeded at Stage 2 for `RET2`.

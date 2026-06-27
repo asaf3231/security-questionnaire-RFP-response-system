@@ -20,8 +20,10 @@ Maintained by: Asaf (PM)
 
 | Fact | Value | Source-of-truth command | Verified | Commit |
 |---|---|---|---|---|
-| offline suite | _pending Stage 1_ | `make test` | — | — |
-| import-safety (`ENV4`) | _pending Stage 1_ | `python -c "import app.config, app.schema, app.kb, app.retrieval, app.context_stack, app.llm, app.draft, app.confidence, app.routing, app.state, app.audit, app.export, app.pipeline"` | — | — |
+| offline suite | 39 pass / 0 skip / 0 fail | `make test` | 2026-06-27 | stage-1-env |
+| import-safety (`ENV4`, Stage-1 scope) | clean; lazy `_claude_client` `None` | `python -c "import app.config, app.schema, app.kb"` (empty cwd, no `.env`; full 13-module set re-proven as modules land) | 2026-06-27 | stage-1-env |
+| synthetic KB size | 20 chunks / 19 approved / 5 restricted-or-internal | `python -c "import app.kb as k;c=k.load_kb();print(len(c))"` | 2026-06-27 | stage-1-env |
+| pinned deps | 24 pins (pydantic 2.13.4 · rank-bm25 0.2.2 · anthropic 0.112.0 · python-dotenv 1.2.2 · pytest 9.1.1); venv py 3.12.4 | `grep -c '==' requirements.txt` | 2026-06-27 | stage-1-env |
 | Recall@K (`RET2`) | _pending Stage 2_ | `make eval` | — | — |
 | grounding rate (`EVAL1`) | _pending Stage 7_ | `make eval` | — | — |
 | routing accuracy (`EVAL1`) | _pending Stage 7_ | `make eval` | — | — |

@@ -100,12 +100,15 @@ The service must run in a clean environment with no manual fixups.
   A real-model draft is a separate, explicitly gated command (§5): `make demo-live` — the **only**
   path that touches the Claude API; it still never sends anything externally.
 
-- **Import-safe (non-negotiable):** `import app.config`, `import app.schema`, `import app.kb`,
-  `import app.retrieval`, `import app.context_stack`, `import app.draft`, `import app.confidence`,
-  `import app.routing`, `import app.state`, `import app.audit`, `import app.export`,
-  `import app.pipeline`, `import app.llm` must succeed with **zero side effects** — no network, no
-  Claude client constructed, no `.env` required, no `data/*` read, no file written. All clients are
-  lazy singletons (`_get_claude()`). Enforced by `ENV4`.
+- **Import-safe (non-negotiable):** the full eventual module set —
+  `app.config`, `app.schema`, `app.kb`, `app.retrieval`, `app.context_stack`, `app.draft`,
+  `app.confidence`, `app.routing`, `app.state`, `app.audit`, `app.export`, `app.pipeline`,
+  `app.llm` (+ `app.eval.*`) — must `import` with **zero side effects** — no network, no Claude
+  client constructed, no `.env` required, no `data/*` read, no file written. All clients are lazy
+  singletons (`_get_claude()`). **Modules are created as their implementing stage lands** (no
+  premature stub modules — §8); `ENV4` proves import-safety for the modules that **exist at the
+  current stage** and the full set is re-proven as later modules land (Stage 1: `app.config`,
+  `app.schema`, `app.kb`).
 
 ### 1.1 Pinned dependencies (non-negotiable)
 `requirements.txt` pins **every** non-stdlib import with `==`; a fresh venv must `pip install -r

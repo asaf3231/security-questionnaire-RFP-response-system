@@ -1,0 +1,15 @@
+{
+  "questionnaire_id": "q-review-001",
+  "items": [
+    {
+      "item_id": "q-review-001-i1",
+      "question": "What is your indemnification policy for data breaches or security failures caused by your platform?",
+      "topic_tags": ["legal", "compliance", "security"]
+    },
+    {
+      "item_id": "q-review-001-i2",
+      "question": "Do you carry cyber liability insurance and what are the coverage limits?",
+      "topic_tags": ["legal", "compliance", "security"]
+    }
+  ]
+}

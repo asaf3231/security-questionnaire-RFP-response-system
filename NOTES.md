@@ -92,5 +92,25 @@ Seven concrete, grep/test-enforced failures, each a `RULE_*`: (1) grounding/hall
 
 ---
 
+## Stage decisions
+
+### D-S1 — Stage 1 SEC1 test modification scrutinized & accepted (2026-06-27)
+During the reviewer-gate correction, the executer modified the `SEC1` test (tightened the
+secret-scan to `sk-ant-[A-Za-z0-9_-]{20,}`) because its **own updated handback prose** (documenting
+the SEC1 check) tripped the prior loose heuristic — a false positive on documentation, not a leak.
+**Verifier-independence ruling:** the PM re-ran the check at the pre-edit (staged) revision and ran an
+**independent** secret scan — zero real-key shapes / zero non-placeholder `ANTHROPIC_API_KEY=` in any
+tracked file. The change still catches any real key + the `ANTHROPIC_API_KEY=` assignment case →
+**a strengthening, not a weakening; accepted.** Surfaced to Asaf in the Stage 1 handback.
+**Why:** the rule guards against an executer *relaxing a check to mask a real failure*; here nothing
+was masked and detection improved. **How to apply:** any future graded-check edit gets the same
+treatment — re-run at pre-edit + an independent verification before accept; halt to Asaf on any doubt.
+
+### Stage 2 follow-ups (deferred from Stage 1 review — do at Stage 2 when `kb.py` is next touched)
+- Remove the dead `and required_field != "approved"` sub-condition in `_validate_kb_record`.
+- Add a `chunk_id`-uniqueness `ValueError` across `approved_answers` + `docs` in `load_kb`
+  (latent: duplicate ids would break Stage 2 citations/dedup).
+
 ## Handback pointers (filled per stage; pointer-not-copy)
-_(none yet — Stage 0 is PM-authored spine; first executer handback lands at Stage 1.)_
+Stage 0 ✅ — spine genesis (PM-authored) · commit abb793a · tag stage-0-spine
+Stage 1 ✅ — handbacks/stage-1.md · verdict APPROVE (1 finding fixed, SEC1 edit accepted) · tag stage-1-env
