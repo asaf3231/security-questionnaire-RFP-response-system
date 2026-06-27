@@ -37,3 +37,7 @@ data/kb/docs/*.json
 
 # Pytest cache
 .pytest_cache/
+
+# samples/ is a TRACKED directory — do NOT gitignore it.
+# It holds ONE redacted demo export + audit for reviewers (see CLAUDE.md §2).
+# The live exports/ and audit/ directories above stay gitignored.

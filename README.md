@@ -77,3 +77,73 @@ Governance is enforced in **code**, not prompts: every boundary is a `RULE_*` co
 - The offline graded path uses `MockLLM` (seeded, deterministic). The live lane (`make demo-live`)
   requires an `ANTHROPIC_API_KEY` but still never sends anything externally.
 - Python 3.11+ is required. The service is OS-agnostic (no absolute paths; all paths via `pathlib`).
+
+---
+
+## Package boundary + run-from-clean-checkout
+
+### What ships (runtime)
+
+| Path | Role |
+|---|---|
+| `app/` | The Comet agent service — all modules (config, schema, kb, retrieval, context\_stack, llm, draft, confidence, routing, state, audit, export, pipeline, eval/) |
+| `data/*.synthetic.*` | Bounded synthetic KB, questionnaires, policy tags — runtime inputs |
+| `requirements.txt` | Pinned deps — install with `pip install -r requirements.txt` |
+| `pyproject.toml` | Minimal package metadata (`requires-python >= 3.11`; packages = `app` + `app.eval`) |
+| `.env.example` | Placeholder-only env template |
+| `Makefile` | One-command run/test/demo/eval entry points |
+| `README.md` | This file |
+| `samples/` | ONE redacted demo export (`.md` + `.csv`) + audit (`.jsonl`) — shows output shape; not live data |
+
+### Dev-only (excluded from any dist)
+
+| Path | Role |
+|---|---|
+| `tests/` | Offline deterministic pytest suite |
+| `fixtures/` | Labeled eval gold + Recall@K gold (held-out; synthetic) |
+| `scripts/` | Demo runners (`run_demo.py`, `run_live_draft.py`) + integrity pre-flight |
+| `exports/` | **gitignored** — machine-local generated response docs |
+| `audit/` | **gitignored** — machine-local append-only JSONL audit logs |
+| `.venv/` | **gitignored** — virtual environment |
+
+### One-command clean-checkout path
+
+All `make` targets require the venv to be set up first (they run `.venv/bin/python` /
+`.venv/bin/pytest` — never system python). If `.venv` is missing, the target prints a clear
+bootstrap message and exits non-zero.
+
+```bash
+# Bootstrap (once per clone)
+python3 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\Activate.ps1
+make install                     # pip install -r requirements.txt into the venv
+
+# Optional: set up the live lane
+cp .env.example .env
+# Edit .env and add ANTHROPIC_API_KEY — NEVER commit your .env
+
+# Run targets (all use .venv/bin/python — no manual venv activation needed after bootstrap)
+make test       # offline deterministic pytest suite (no .env, no network; 315+ tests)
+make demo       # end-to-end pipeline over both demo cases (MockLLM, no network)
+make eval       # offline evaluation harness (Recall@K, grounding rate, routing accuracy, calibration)
+make demo-live  # gated live Claude draft (requires ANTHROPIC_API_KEY; no external send)
+```
+
+### `make test` + `make eval` pre-flight
+
+Before running the suite or eval, `make integrity` checks that the graded-artifact set
+(`tests/`, `fixtures/`) has not been modified or deleted vs HEAD (`RULE_GRADED_ARTIFACT_LOCK`).
+An add is allowed (new tests/fixtures); a modify or delete aborts the run. A failing test is a
+**finding to report**, never fixed by editing the test.
+
+### Governance boundary
+
+- `RULE_NO_EXTERNAL_SEND` — export writes to local disk only; no email/HTTP-POST/upload.
+- `RULE_NO_SELF_APPROVE` — the agent never transitions an item to `APPROVED`; only a human does.
+- `RULE_SENSITIVITY_GATE` — `internal`/`restricted` items are held from export without human review.
+- All 11 `RULE_*` identifiers are defined in `app/config.py` and enforced at their named chokepoints.
+
+### Samples
+
+The `samples/` directory contains one redacted demo output showing the export and audit shape.
+Paths and timestamps are replaced with placeholders. All content is synthetic.

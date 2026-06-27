@@ -1,0 +1,2 @@
+item_id,question,status,confidence_score,queue,citations
+q-confident-001-i1,"Does your platform encrypt data at rest, and if so, what encryption standard do you use?",APPROVED,0.7989822565691354,,kb-001;kb-002;kb-012;kb-006;kb-004

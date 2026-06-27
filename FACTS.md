@@ -20,7 +20,8 @@ Maintained by: Asaf (PM)
 
 | Fact | Value | Source-of-truth command | Verified | Commit |
 |---|---|---|---|---|
-| offline suite | 315 pass / 1 skip / 0 fail (skip = DRAFT2 live-gated) | `make test` (venv active) | 2026-06-27 | stage-7-eval (honest, 7r) |
+| offline suite | 373 pass / 1 skip / 0 fail (+58 S8; skip = DRAFT2 live-gated) | `make test` (venv-clean Makefile, no manual activation) | 2026-06-27 | stage-8-packaging |
+| packaging + security gate (S8) | venv-clean Makefile (373/1 via `make test` no `source`); add-only (META-LOCK, tests/fixtures unmodified); pyproject boundary; redacted samples; **security scan CLEAN** (7 LEAK* + no-external-send) | `make test` + manual `/security-review`-equivalent scan | 2026-06-27 | stage-8-packaging |
 | eval metrics (`EVAL1`/`EVAL3`, `make eval`) — HONEST | recall@k 1.0 · grounding match_rate 1.0 / **raw_grounded 0.833** (eval-006 ungrounded) · routing_accuracy 1.0 · calibration auto{g5,u0}/**review{g0,u1}** (negative case exposed) | `make eval` (PM-verified computed: perturb gold → routing_acc 1.0→0.833; real `grounding_check`, no simulator) | 2026-06-27 | stage-7-eval (honest, 7r) |
 | eval-006 negative test (honest, code-driven) | grounded=False · score 0.074 < `CONFIDENCE_REVIEW_THRESHOLD` · ROUTED_LOW_CONFIDENCE | PM ran the REAL pipeline (not gold-fitted) | 2026-06-27 | stage-7-eval (honest, 7r) |
 | Recall@K post-refactor (`RET2`) | Recall@5 = 1.0000 (held after full-corpus BM25 index, D-S6) | `python -c "from app.eval.fixtures import load_eval_fixtures as L;from app.eval.rubric import compute_recall_at_k as C;print(C(L()))"` | 2026-06-27 | stage-6-pipeline |

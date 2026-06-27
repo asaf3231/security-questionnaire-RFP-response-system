@@ -12,8 +12,26 @@
 # Governance: `test` and `eval` depend on `integrity`, which aborts (non-zero) if the
 # graded-artifact set (tests/, fixtures/) has modified/deleted lines vs HEAD without the
 # human override ALLOW_GRADED_EDIT=1 (RULE_GRADED_ARTIFACT_LOCK; QA META-LOCK; CLAUDE.md §5.3).
+#
+# venv-clean: all python/pytest invocations use .venv/bin/python and .venv/bin/pytest.
+# If .venv is missing, a clear bootstrap message is printed and the target exits non-zero.
+# NEVER silently falls back to system python (that caused rank_bm25 import failures).
 
 .PHONY: install integrity test demo demo-live eval
+
+PY     := .venv/bin/python
+PYTEST := .venv/bin/pytest
+
+# Guard: abort with a bootstrap message if the venv is missing.
+define check_venv
+	@if [ ! -f "$(PY)" ]; then \
+		echo ""; \
+		echo "ERROR: .venv not found — bootstrap first:"; \
+		echo "    python3 -m venv .venv && make install"; \
+		echo ""; \
+		exit 1; \
+	fi
+endef
 
 install:
 	pip install -r requirements.txt
@@ -22,13 +40,17 @@ integrity:
 	bash scripts/check_graded_artifacts.sh
 
 test: integrity
-	pytest -q
+	$(call check_venv)
+	$(PYTEST) -q
 
 demo:
-	python scripts/run_demo.py
+	$(call check_venv)
+	$(PY) scripts/run_demo.py
 
 demo-live:
-	python scripts/run_live_draft.py
+	$(call check_venv)
+	$(PY) scripts/run_live_draft.py
 
 eval: integrity
-	python -m app.eval.harness
+	$(call check_venv)
+	$(PY) -m app.eval.harness

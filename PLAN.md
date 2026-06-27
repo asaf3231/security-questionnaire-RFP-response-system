@@ -53,7 +53,7 @@ Status values: ⬜ Not started · 🔄 In progress · 🟡 Awaiting verification
 | 5 | Audit log + export + hard boundary | `AUDIT1`–`AUDIT3`, `EXPORT1`–`EXPORT3`, `BOUND1`–`BOUND2` | ✅ | ✅ Complete (2026-06-27; suite 232/1-skip — see FACTS) |
 | 6 | End-to-end pipeline + the two demo cases | `PIPE1`–`PIPE2`, `DEMO1`–`DEMO2`, `RULE1`–`RULE2` | ✅ | ✅ Complete (2026-06-27; suite 278/1-skip — see FACTS) |
 | 7 | Offline eval harness + Option-A routing + confidence refactor | `EVAL1`–`EVAL3`, `RET2`, `LEAK4`–`LEAK5` | ✅ | ✅ Complete via honest re-do **7r** (2026-06-27; first attempt 39469d0 REJECTED as fabricated → fixed; suite 315/1, eval-006 honestly caught — see FACTS) |
-| 8 | Anti-leakage & packaging hardening | `LEAK1`–`LEAK-S`, `PKG1`–`PKG3`, `SEC1`–`SEC2` | ✅ (+`/security-review`) | ⬜ Not started |
+| 8 | Anti-leakage & packaging hardening | `LEAK1`–`LEAK-S`, `PKG1`–`PKG3`, `SEC1`–`SEC2`, `META-*` | ✅ (+sec-scan) | ✅ Complete (2026-06-27; suite 373/1; security scan CLEAN — see FACTS) |
 | 9 | Brief/Deck + Technical Appendix | `DOC1`–`DOC2` | — | ⬜ Not started |
 
 **Reviewer-gate trigger (this project):** on any stage that touches a **graded contract** — a §9
@@ -264,13 +264,19 @@ honest `stage-7-eval`.
 governance gate.
 **Inputs:** `CLAUDE.md` §5.2 (the seven `LEAK*`); the whole tree.
 **Outputs:** hardened `.gitignore`/`README.md`/docstrings; redacted sample export+audit; `tests/`.
-**Definition of Done (QA: `LEAK1`–`LEAK-S`, `PKG1`–`PKG3`, `SEC1`–`SEC2`):**
-- [ ] `LEAK1`–`LEAK-S` — all seven leakage cross-checks green (secret/PII/hardcode/contamination/
-  fabricated/grounding/sensitivity).
-- [ ] `PKG1`–`PKG3` — clean-checkout reproduction; `.gitignore` correct; README + module docstrings.
-- [ ] **`/security-review`** run; findings folded or surfaced as `DECISION-NEEDED`.
-**Reviewer gate:** ✅ `/code-review` + **`/security-review`** (governance gate).
-**Status:** ⬜ Not started.
+**Definition of Done (QA: `LEAK1`–`LEAK-S`, `PKG1`–`PKG3`, `SEC1`–`SEC2`, `META-*`):**
+- [x] `LEAK1`–`LEAK-S` — all seven leakage cross-checks green (PM re-verified across the full tracked set).
+- [x] `PKG1`–`PKG3` — venv-clean Makefile (`make test` 373/1 with NO manual `source`); `.gitignore`
+  correct; pyproject package boundary (tests/fixtures/data excluded); README run-from-clean section;
+  redacted samples tracked under `samples/`.
+- [x] `META-*` — META-LOCK (add-only honored: tests/fixtures unmodified), META-FALSIFY/REALPATH
+  (no `_simulate_*`, red negative case), META-PROVENANCE (`fixtures/eval/PROVENANCE.md` added).
+- [x] **Security review** — native `/security-review` CLI cannot run (no git remote/`origin`); PM ran the
+  equivalent comprehensive governance scan → **CLEAN, no findings** (no real secret/PII; `.env` ignored;
+  no network-send primitive outside the gated `app/llm.py`; samples redacted).
+**Reviewer gate:** ✅ manual security/governance scan (CLEAN). *(Native `/security-review` needs a remote
+— offer to push if Asaf wants the CLI run.)*
+**Status:** ✅ Complete — PM-verified 2026-06-27; suite 373/1; committed as `stage-8-packaging`.
 
 ---
 
