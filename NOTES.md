@@ -111,6 +111,19 @@ Seven concrete, grep/test-enforced failures, each a `RULE_*`: (1) grounding/hall
 
 ## Stage decisions
 
+### D-S3 — Stage 3 grounding + context-stack design (2026-06-27, PM; flagged for Asaf at the boundary)
+- **Citations carry chunk_ids via the Retrieval layer.** `assemble_context` formats each Retrieval-layer
+  entry as `"[<chunk_id>] <chunk text>"` so `draft_answer` can cite by id while the layer still holds
+  **only** the retrieved chunks' content (CTX1 intent preserved — nothing outside the top-K).
+- **New §9 constants Stage 3 adds (additions, not changes to existing contracts):**
+  `GROUNDING_COVERAGE_MIN` (default **0.5**) — the content-support threshold needed to satisfy Asaf
+  req #4 ("claims not backed by the citations"); and `GROUNDING_FAIL` — the §5.1 audit reason-code
+  materialized as a named constant. **Why:** the grounding gate Asaf requested intrinsically needs a
+  coverage threshold + a reason-code constant; both are surfaced for Asaf's review at the boundary.
+  **How to apply:** the gate is ungrounded if citations < `GROUNDING_MIN_CITATIONS`, OR any cited id ∉
+  retrieved set, OR content coverage < `GROUNDING_COVERAGE_MIN` → byte-exact `UNGROUNDED_PLACEHOLDER`.
+
+
 ### D-S1 — Stage 1 SEC1 test modification scrutinized & accepted (2026-06-27)
 During the reviewer-gate correction, the executer modified the `SEC1` test (tightened the
 secret-scan to `sk-ant-[A-Za-z0-9_-]{20,}`) because its **own updated handback prose** (documenting
@@ -137,3 +150,12 @@ treatment — re-run at pre-edit + an independent verification before accept; ha
 Stage 0 ✅ — spine genesis (PM-authored) · commit abb793a · tag stage-0-spine
 Stage 1 ✅ — handbacks/stage-1.md · verdict APPROVE (1 finding fixed, SEC1 edit accepted) · tag stage-1-env
 Stage 2 ✅ — handbacks/stage-2.md · verdict APPROVE (no findings; Recall@5=1.0 computed) · tag stage-2-retrieval
+Stage 3 ✅ — handbacks/stage-3.md · verdict APPROVE (no findings; D-S3 constants added+synced to §9) · tag stage-3-draft
+
+### D-S3 status (2026-06-27) — IMPLEMENTED & PM-verified
+The two new constants landed in `app/config.py` **and** were synced into `CLAUDE.md` §9
+(`GROUNDING_COVERAGE_MIN=0.5`; `GROUNDING_FAIL` audit reason-code). Grounding gate verified by PM
+across all three ungrounded conditions (no citation / fabricated id / low coverage). **Known
+limitation (not a defect):** the gate is **lexical** coverage, not semantic — a draft could pass by
+echoing chunk tokens. Acceptable for the deterministic offline lane; the live lane + mandatory human
+review are the real backstop. Good Q&A talking point.

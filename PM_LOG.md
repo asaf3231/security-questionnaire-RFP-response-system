@@ -111,3 +111,41 @@ Next PM should: get Asaf's go-ahead, then brief **Stage 3** (Context Stack + dra
 byte-exact `UNGROUNDED_PLACEHOLDER`, `RULE_GROUNDED_ONLY`) → reviewer gate fires. DRAFT2 is live-gated.
 Watch out for / open: Stage 6 efficiency follow-up (build BM25 index once); Recall=1.0 is honest but
 reflects a small/easy synthetic corpus — good Q&A talking point, not a defect; `make test` needs venv.
+
+## 2026-06-27 14:10 — [BACKEND] SESSION START
+Picking up: **Stage 2 ✅ verified & locked by Asaf**; authorized to execute **Stage 3** (Context Stack
++ draft generation + grounding) under the autonomous loop, then HALT at the Stage 3 boundary for Asaf.
+State as read (to re-verify): suite 71 green (`stage-2-retrieval`); Recall@5=1.0; retrieval
+deterministic. Asaf's Stage 3 reqs: (1) `context_stack.py` strict 4-layer Pydantic contract,
+Retrieval layer = ONLY the exact Stage-2 chunks; (2) `LLMProvider` ABC + `MockLLM` (offline det.) +
+`ClaudeLLM` (lazy, network-gated); (3) `draft_answer(context_stack)` → text + structured `citations[]`;
+(4) strict literal grounding gate (`RULE_GROUNDED_ONLY`) → byte-exact `UNGROUNDED_PLACEHOLDER` +
+`GROUNDING_FAIL`; (5) live/network errors degrade to routed-for-review placeholder, no unhandled
+exceptions.
+Plan for this session: write `briefs/stage-3.md` (incl. the design decisions: chunk_id markers in the
+retrieval layer so citations carry ids; **add `GROUNDING_COVERAGE_MIN` + `GROUNDING_FAIL` to §9/config**
+— flagged); spawn cold `general-purpose` executer (Sonnet); PM re-runs `CTX*`/`SCHEMA1`/`DRAFT1`/
+`GROUND1` + offline degradation + determinism independently; `/code-review` gate; record FACTS; mark
+Stage 3; commit `stage-3-draft`; HALT + handback (surfacing the new constants). Do not advance to Stage 4.
+
+## 2026-06-27 14:35 — [BACKEND] SESSION END / HANDOFF
+Did: **Stage 3 executed via the autonomous loop and PM-verified ✅.** Cold executer built
+`app/context_stack.py` (4-layer backpack; Retrieval = only passed chunks, `[chunk_id] text`),
+`app/llm.py` (`LLMProvider` ABC + deterministic `MockLLM` + lazy/gated `ClaudeLLM` that degrades to
+the placeholder), `app/draft.py` (`draft_answer` + `grounding_check` 3-condition gate), and added the
+two flagged constants to config. PM independent QA: `make test` **116 pass / 1 skip** (re-run);
+grounding gate verified across ALL three ungrounded conditions incl. condition-3 in isolation
+(valid-cite + unrelated text → `GROUNDING_FAIL`, byte-exact placeholder); MockLLM determinism +
+offline degradation (raising provider → placeholder, no exception) + ENV4 (9 modules, `_claude_client`
+None) all re-verified. **Verifier-independence:** `test_stage1.py`/`test_stage2.py` UNTOUCHED;
+`config.py` diff = additions-only (no existing value changed). **`/code-review`: APPROVE**, no
+correctness findings; documented the lexical-vs-semantic grounding limitation. Synced the two new
+constants into `CLAUDE.md` §9 (config↔§9 kept consistent). Committed `stage-3-draft`.
+Status now: ✅ Stage 3 complete, committed. Suite 116/1-skip. **HALTED at the Stage 3 boundary per Asaf.**
+Next PM should: get Asaf's go-ahead, then brief **Stage 4** (confidence + routing + state machine;
+`CONF1`–`CONF3`/`ROUTE1`–`ROUTE3`/`STATUS1`–`STATUS2`) — hybrid confidence (deterministic gate + LLM
+rationale), the 3 review triggers, `RULE_NO_SELF_APPROVE` state-machine guard; materialize the §5.1
+reason-codes Stage 4 needs. Graded contracts → reviewer gate fires.
+Watch out for / open: the two NEW §9 constants are flagged for Asaf's review (revert/retune if
+desired); grounding is lexical not semantic (known limitation); Stage 6 BM25-rebuild efficiency
+follow-up still open; `make test` needs venv.

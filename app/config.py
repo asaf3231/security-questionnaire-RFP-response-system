@@ -37,6 +37,13 @@ MAX_OUTPUT_TOKENS: int = 1024
 DRAFT_TEMPERATURE: float = 0.0            # determinism in the live lane
 
 # ---------------------------------------------------------------------------
+# Grounding (Stage 3) — RULE_GROUNDED_ONLY
+# ---------------------------------------------------------------------------
+GROUNDING_COVERAGE_MIN: float = 0.5   # fraction of draft's significant content tokens that must
+                                       # appear in the union of cited chunk texts (D-S3)
+GROUNDING_FAIL: str = "GROUNDING_FAIL"  # §5.1 audit reason-code emitted at app/draft.py chokepoint
+
+# ---------------------------------------------------------------------------
 # Determinism
 # ---------------------------------------------------------------------------
 RANDOM_SEED: int = 42   # seeds MockLLM + any sampling; the offline suite is reproducible

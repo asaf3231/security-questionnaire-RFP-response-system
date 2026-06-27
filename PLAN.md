@@ -48,7 +48,7 @@ Status values: ⬜ Not started · 🔄 In progress · 🟡 Awaiting verification
 | 0 | Project setup & spine | meta (this file set) | — | ✅ Complete (Asaf green-lit 2026-06-27) |
 | 1 | Environment, secrets, config & synthetic inputs | `ENV1`–`ENV4`, `SEC1`–`SEC2`, `KB1`–`KB2`, `DATA1` | ✅ | ✅ Complete (2026-06-27; suite 39 green — see FACTS) |
 | 2 | KB chunks + deterministic retrieval (`rank_bm25`) | `RET1`–`RET3` | ✅ | ✅ Complete (2026-06-27; suite 71 green; Recall@5 — see FACTS) |
-| 3 | Context Stack + draft generation + grounding | `CTX1`–`CTX4`, `SCHEMA1`, `DRAFT1`–`DRAFT2`, `GROUND1` | ✅ | ⬜ Not started |
+| 3 | Context Stack + draft generation + grounding | `CTX1`–`CTX4`, `SCHEMA1`, `DRAFT1`–`DRAFT2`, `GROUND1` | ✅ | ✅ Complete (2026-06-27; suite 116/1-skip — see FACTS) |
 | 4 | Confidence + routing + state machine | `CONF1`–`CONF3`, `ROUTE1`–`ROUTE3`, `STATUS1`–`STATUS2` | ✅ | ⬜ Not started |
 | 5 | Audit log + export + hard boundary | `AUDIT1`–`AUDIT3`, `EXPORT1`–`EXPORT3`, `BOUND1`–`BOUND2` | ✅ | ⬜ Not started |
 | 6 | End-to-end pipeline + the two demo cases | `PIPE1`–`PIPE2`, `DEMO1`–`DEMO2`, `RULE1`–`RULE2` | ✅ | ⬜ Not started |
@@ -144,17 +144,20 @@ offline `MockLLM` is the graded path, `ClaudeLLM` the gated live lane.
 **Inputs:** `CLAUDE.md` §5 (`RULE_GROUNDED_ONLY`), §7, §9; `app/schema.py`; the retrieval output.
 **Outputs:** `app/context_stack.py`, `app/llm.py`, `app/draft.py`, `tests/`.
 **Definition of Done (QA: `CTX1`–`CTX4`, `SCHEMA1`, `DRAFT1`–`DRAFT2`, `GROUND1`):**
-- [ ] `CTX1`–`CTX4` — all four layers present; Retrieval layer = only retrieved chunks; Constraint
-  layer injects active hard boundaries; State layer carries item *X* of *Y*.
-- [ ] `SCHEMA1` — `DraftAnswer`/`Citation` validate; malformed draft rejected at the boundary.
-- [ ] `DRAFT1` — `draft_answer(context_stack)` returns text + `citations[]`; offline `MockLLM`
-  deterministic; prompt built only from the `ContextStack`.
-- [ ] `DRAFT2` *(live, gated)* — a model error degrades to a routed-for-review item with
-  `UNGROUNDED_PLACEHOLDER`, never a partial/invented answer.
-- [ ] `GROUND1` — ungrounded answer → `UNGROUNDED_PLACEHOLDER` (byte-exact) + `GROUNDING_FAIL` audited
-  (`RULE_GROUNDED_ONLY`).
-**Reviewer gate:** ✅ (`LLMProvider` interface, schema, byte-exact literal, `RULE_GROUNDED_ONLY`).
-**Status:** ⬜ Not started.
+- [x] `CTX1`–`CTX4` — 4 layers present; Retrieval layer = ONLY passed chunks (`[chunk_id] text`);
+  Constraint layer injects the high-risk clause for high-risk items; State layer = "Question X of Y".
+- [x] `SCHEMA1` — `DraftAnswer`/`Citation` validate; empty-text draft rejected.
+- [x] `DRAFT1` — `draft_answer(context_stack)` returns text + `citations[]`; offline `MockLLM`
+  deterministic (PM re-verified identical output); prompt built only from the `ContextStack`.
+- [x] `DRAFT2` — offline degradation verified (raising provider → `UNGROUNDED_PLACEHOLDER`, no
+  exception); live half `@skipif(no key)` (1 skip).
+- [x] `GROUND1` — ungrounded (no citation / fabricated id / low coverage) → `UNGROUNDED_PLACEHOLDER`
+  (byte-exact, PM-verified) + `GROUNDING_FAIL` reason-code (`RULE_GROUNDED_ONLY`).
+**Reviewer gate:** ✅ `/code-review` — **APPROVE**, no correctness findings. Note: grounding is
+**lexical** coverage (not semantic) — known limitation, backstopped by the live lane + human review.
+**NEW §9 constants added (Asaf-flagged, additions only):** `GROUNDING_COVERAGE_MIN=0.5`,
+`GROUNDING_FAIL` reason-code — see `NOTES.md` D-S3.
+**Status:** ✅ Complete — PM-verified 2026-06-27; suite 116/1-skip; committed as `stage-3-draft`.
 
 ---
 

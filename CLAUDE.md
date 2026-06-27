@@ -389,6 +389,7 @@ RECALL_AT_K_TARGET          = 0.90      # acceptance bar for Recall@K on labeled
 CONFIDENCE_AUTO_THRESHOLD   = 0.75      # >= this AND no trigger → confident auto-draft (still needs human APPROVED)
 CONFIDENCE_REVIEW_THRESHOLD = 0.50      # <  this → mandatory human review (RULE_HITM_REVIEW_TRIGGER)
 GROUNDING_MIN_CITATIONS     = 1         # min retrieved chunks an asserted answer must cite (RULE_GROUNDED_ONLY)
+GROUNDING_COVERAGE_MIN      = 0.5       # (added Stage 3, Asaf-flagged) min fraction of a draft's significant content tokens that must appear in the cited chunks; below → ungrounded
 AMBIGUITY_SCORE_MARGIN      = 0.10      # top1−top2 BM25-score gap below this → "ambiguous" review trigger
 
 # --- draft model (Stage 3; LIVE lane only — offline path uses MockLLM) ---
@@ -429,6 +430,11 @@ RULE_NO_EVAL_CONTAMINATION = "RULE_NO_EVAL_CONTAMINATION"
 RULE_NO_FABRICATED_METRIC = "RULE_NO_FABRICATED_METRIC"
 RULE_AUDIT_COMPLETE = "RULE_AUDIT_COMPLETE"
 RULE_SAFE_TERMINAL = "RULE_SAFE_TERMINAL"
+
+# --- audit reason-codes (§5.1) — materialized as named constants as each stage needs them ---
+GROUNDING_FAIL = "GROUNDING_FAIL"        # added Stage 3 (RULE_GROUNDED_ONLY chokepoint, app/draft.py)
+# (remaining §5.1 reason-codes — ROUTED_*, SELF_APPROVE_BLOCKED, SENSITIVITY_HOLD,
+#  EXTERNAL_SEND_BLOCKED, ERROR_TERMINAL — materialized at their stages 4–6)
 ```
 
 - The LLM-provider interface (`LLMProvider`: `draft(context_stack) -> DraftAnswer`) is the **only** way
