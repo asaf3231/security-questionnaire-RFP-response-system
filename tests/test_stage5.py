@@ -378,6 +378,12 @@ class TestAUDIT2:
 # ---------------------------------------------------------------------------
 
 
+# Key-SHAPED fake token built at RUNTIME so no literal secret-shape sits in this
+# tracked file — keeps the SEC1 tracked-file scan (sk-ant-[A-Za-z0-9_-]{20,}) green
+# while still exercising redact() on a real-shaped key. Assertions below are unchanged.
+_FAKE_SK_ANT = "sk-ant-" + "A" * 24
+
+
 class TestAUDIT3:
     """AUDIT3: redact() scrubs secrets and PII; written lines must not contain raw values."""
 
@@ -385,7 +391,7 @@ class TestAUDIT3:
         """sk-ant-... token in a string is replaced by [REDACTED-SECRET]."""
         from app.audit import redact
 
-        raw = "The key is sk-ant-ABCDEFGHIJKLMNOPQRSTUVWX in the header."
+        raw = f"The key is {_FAKE_SK_ANT} in the header."
         result = redact(raw)
         assert "sk-ant-" not in result, f"sk-ant- token must be redacted; got: {result!r}"
         assert "[REDACTED-SECRET]" in result
@@ -394,7 +400,7 @@ class TestAUDIT3:
         """ANTHROPIC_API_KEY=<value> is redacted."""
         from app.audit import redact
 
-        raw = "Config: ANTHROPIC_API_KEY=sk-ant-ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        raw = f"Config: ANTHROPIC_API_KEY={_FAKE_SK_ANT}"
         result = redact(raw)
         assert "sk-ant-" not in result
         assert "ANTHROPIC_API_KEY=[REDACTED-SECRET]" in result
@@ -421,7 +427,7 @@ class TestAUDIT3:
         from app.audit import redact
 
         obj = {
-            "key": "sk-ant-ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+            "key": _FAKE_SK_ANT,
             "contact": "admin@secret.org",
             "safe": "normal text",
         }
@@ -434,7 +440,7 @@ class TestAUDIT3:
         """redact() recursively processes lists."""
         from app.audit import redact
 
-        obj = ["sk-ant-ABCDEFGHIJKLMNOPQRSTUVWXYZ", "user@company.com", "safe"]
+        obj = [_FAKE_SK_ANT, "user@company.com", "safe"]
         result = redact(obj)
         assert "sk-ant-" not in str(result)
         assert "user@company.com" not in str(result)
@@ -449,7 +455,7 @@ class TestAUDIT3:
             questionnaire_id="q1",
             item_id="i1",
             event="tool_call",
-            detail={"api_key": "sk-ant-ABCDEFGHIJKLMNOPQRSTUVWXYZ_fake"},
+            detail={"api_key": _FAKE_SK_ANT + "_fake"},
             timestamp="2026-06-27T00:00:00+00:00",
         )
         write_audit(evt, log_path=log)

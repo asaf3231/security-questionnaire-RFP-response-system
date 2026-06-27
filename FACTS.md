@@ -20,7 +20,7 @@ Maintained by: Asaf (PM)
 
 | Fact | Value | Source-of-truth command | Verified | Commit |
 |---|---|---|---|---|
-| offline suite | 232 pass / 1 skip / 0 fail (39 S1 + 32 S2 + 46 S3 + 63 S4 + 53 S5; skip = DRAFT2 live-gated) | `make test` (venv active) | 2026-06-27 | stage-5-export |
+| offline suite | 232 pass / 1 skip / 0 fail (39 S1 + 32 S2 + 46 S3 + 63 S4 + 53 S5; skip = DRAFT2 live-gated) | `make test` (venv active) | 2026-06-27 | fix-sec1 (was 231p/1f/1s at stage-5-export — SEC1 red on test_stage5 fixtures; fixed, see NOTES FIX-SEC1) |
 | import-safety (`ENV4`, Stage-5 scope) | clean; lazy `_claude_client` `None` (14 modules); **no `audit/`/`exports/` dir created at import** (PM-verified) | `python -c "import app.config, app.schema, app.kb, app.retrieval, app.eval.rubric, app.eval.fixtures, app.context_stack, app.llm, app.draft, app.confidence, app.routing, app.state, app.audit, app.export"` (empty cwd, no `.env`; progressive) | 2026-06-27 | stage-5-export |
 | demo routing (real data, `ROUTE*`) | case_confident i1/i2 → auto (score 0.84/0.86, not routed); case_review both → ROUTED_HIGH_RISK→legal; case_confident i3 → ROUTED_HIGH_RISK→security (security tag) | `python` over `route_for_review` on `data/questionnaires/*` | 2026-06-27 | stage-4-routing |
 | synthetic KB size | 20 chunks / 19 approved / 5 restricted-or-internal / 20 unique ids | `python -c "import app.kb as k;c=k.load_kb();print(len(c))"` | 2026-06-27 | stage-1-env |

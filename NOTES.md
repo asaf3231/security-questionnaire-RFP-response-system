@@ -111,6 +111,39 @@ Seven concrete, grep/test-enforced failures, each a `RULE_*`: (1) grounding/hall
 
 ## Stage decisions
 
+### FIX-SEC1 — SEC1 was red since stage-5-export; PM QA miss owned + fixed (2026-06-27)
+**What:** `tests/test_stage5.py` embedded **literal** key-shaped fixtures (`sk-ant-ABCDEF…`, 24 chars) to
+exercise `redact()`. The SEC1 scanner (`sk-ant-[A-Za-z0-9_-]{20,}` over the tracked set, `test_stage1.py`)
+correctly flagged them → **SEC1 has been failing since `stage-5-export`** (verified by re-running at the
+tag in a worktree: 1 failed). **My Stage-5 handback reported "232 passed / 1 skip" — that was wrong; it
+was 231 passed / 1 failed / 1 skip.** Owned + surfaced to Asaf.
+**Fix:** runtime-construct the fixtures (`_FAKE_SK_ANT = "sk-ant-" + "A"*24`) so no literal secret-shape
+sits in a tracked file. **SEC1 unchanged** (`test_stage1.py` untouched); the redaction **assertions are
+unchanged** — only fixture *construction* changed (literal → runtime). Re-verified: SEC1 green, all 10
+redaction tests green, full suite **232 pass / 1 skip**, zero `sk-ant-[20+]` literals anywhere.
+**Verifier-independence note:** PM edited a graded test to resolve a fixture-hygiene conflict between
+two graded checks (SEC1 vs the redaction tests); neither assertion was weakened (confirmed by re-running
+both). **Process lesson:** the Stage-5 suite count was taken from a `tail -2` view that did not surface
+the failure — going forward, grep the pytest summary for `failed` explicitly, not just the pass line.
+
+### D-S6 — Stage 6 pipeline/retrieval-refactor design (2026-06-27, PM; flagged for Asaf at boundary)
+- **Retrieval refactor (Asaf req #2 — build index ONCE):** add a `Retriever` class that builds the
+  `BM25Okapi` index over the **full approved corpus once**; `retrieve()` (and the pipeline) score the
+  query against it and **filter results after scoring**. This is the standard RAG pattern (stable
+  full-corpus IDF) AND the perf fix — **but it changes BM25 scores** vs Stage-2's per-filtered-corpus
+  index. **Guardrail:** `RET1`–`RET3` must stay green and Recall@K must stay ≥ `RECALL_AT_K_TARGET`;
+  if not, the executer **HALTS as DECISION-NEEDED** (no test-weakening, no fixture-tuning). PM
+  re-verifies Recall@K + the demo behaviors and records the (possibly new) number in `FACTS.md`.
+- **Pipeline (`RULE_SAFE_TERMINAL`):** each item runs in a try/except; any component failure →
+  item routed to a safe terminal (`ROUTED_FOR_REVIEW`) with `UNGROUNDED_PLACEHOLDER` + an
+  `ERROR_TERMINAL` audit event — never an uncaught exception, never a fabricated answer.
+- **Human-in-the-loop demo:** the pipeline (agent) advances items only to `SCORED` (confident) or
+  `ROUTED_FOR_REVIEW` (it cannot self-approve). `run_demo.py` then **simulates the human action**
+  (`transition(..., actor="human")` → `APPROVED`) for the confident non-sensitive items and exports
+  only those — faithfully demonstrating the HITM boundary (DEMO1 exports; DEMO2 stays routed).
+- **NEW §9 reason-code:** `ERROR_TERMINAL` (last §5.1). **case_confident-i3:** kept as-is — the demo
+  highlights its high lexical score overridden + routed to `security` (defense-in-depth).
+
 ### D-S4 resolution — case_confident-i3 (2026-06-27, Asaf): KEEP AS-IS
 Asaf: keep `case_confident-i3` (security tag → ROUTED_HIGH_RISK) exactly as it is — it is a
 **defense-in-depth showcase** (routing fires even inside the "confident" set). Stage-6 demo presents
@@ -196,39 +229,17 @@ Stage 3 ✅ — handbacks/stage-3.md · verdict APPROVE (no findings; D-S3 const
 Stage 4 ✅ — handbacks/stage-4.md · verdict APPROVE (D-S4 constants added+synced; 1 minor deferred) · tag stage-4-routing
 Stage 5 ✅ — handbacks/stage-5.md · verdict APPROVE (no findings; D-S5 schema+reason-codes added+synced) · tag stage-5-export
 
-### D-S5 status (2026-06-27) — IMPLEMENTED & PM-verified
-Additive schema fields (`ResponseDocItem.sensitivities`, `review_approved`) + 2 §5.1 reason-codes
-(`SENSITIVITY_HOLD`, `EXTERNAL_SEND_BLOCKED`) landed in code AND synced into `CLAUDE.md` §9.
-PM independently verified: append-only audit + redaction (raw key/email/phone → placeholders);
-APPROVED-only Markdown+CSV export; sensitivity gate holds internal/restricted unless review_approved;
-byte-exact `REVIEW_BANNER`; **AST-grep proof that `export.py` has zero network primitives**
-(`__future__/app/csv/io/pathlib` only); import creates no `audit/`/`exports/` dir. **Documented
-non-issues (not defects):** redaction is scoped to `detail` (deliberate — other fields are controlled
-enums/ids; the phone regex could otherwise corrupt numeric fields); the affirmative export event reuses
-`EXTERNAL_SEND_BLOCKED` as a compliance marker per the §5.1 mapping.
+> _Per-stage "IMPLEMENTED & PM-verified" verification narratives (D-S3/D-S4/D-S5) compacted to
+> `NOTES_archive.md` 2026-06-27 — all re-fetchable from `FACTS.md` + `handbacks/stage-*.md` + tags.
+> The design decisions (above) and the handback pointers stay live here._
 
-### D-S4 status (2026-06-27) — IMPLEMENTED & PM-verified
-The 5 new constants landed in `app/config.py` **and** synced into `CLAUDE.md` §9
-(`DEFAULT_REVIEWER_QUEUE` + 4 §5.1 reason-codes). Confidence number verified model-independent +
-invariant to rationale; routing precedence + queue-from-policy-map verified; state machine blocks agent
-self-approve (`SELF_APPROVE_BLOCKED`) and allows `actor="human"`. **Real-data routing characterized**
-(see FACTS "demo routing"): case_confident i1/i2 = clean auto-drafts; case_review = ROUTED_HIGH_RISK→legal.
-
-### Stage 4 reviewer-gate follow-ups
+### Open follow-ups (live)
 - **Stage 7 (deferred minor):** `confidence.py` rebuilds coverage/dominance in the rationale builder
   (duplicate of `_compute_score`) — refactor `_compute_score` to return components so the rationale
   reuses them (avoids drift; the rationale is an audit-trust artifact).
-- **Stage 6 (demo design):** `case_confident-i3` carries a `security` high-risk tag → it routes
-  (ROUTED_HIGH_RISK→security). For a clean DEMO1, the Stage-6 brief should either showcase i1/i2 as the
-  confident auto-drafts (and present i3 as a bonus "routing fires even inside the confident set"), or
-  retune i3's tags. **Decision deferred to the Stage-6 brief / Asaf.**
+- **Stage 6 (demo design) — RESOLVED (Asaf 2026-06-27): keep `case_confident-i3` as-is.** Its
+  `security` tag → ROUTED_HIGH_RISK→security is a **defense-in-depth showcase** (high lexical score
+  overridden by a structural policy gate). Stage-6 demo presents i1/i2 as the confident auto-drafts and
+  i3 as the in-set routing example.
 - **Documented (not a defect):** ambiguity trigger uses an absolute BM25 gap vs `AMBIGUITY_SCORE_MARGIN`;
   fine for this corpus (real gaps ~6), but a normalized gap would be more robust at scale (Q&A point).
-
-### D-S3 status (2026-06-27) — IMPLEMENTED & PM-verified
-The two new constants landed in `app/config.py` **and** were synced into `CLAUDE.md` §9
-(`GROUNDING_COVERAGE_MIN=0.5`; `GROUNDING_FAIL` audit reason-code). Grounding gate verified by PM
-across all three ungrounded conditions (no citation / fabricated id / low coverage). **Known
-limitation (not a defect):** the gate is **lexical** coverage, not semantic — a draft could pass by
-echoing chunk tokens. Acceptable for the deterministic offline lane; the live lane + mandatory human
-review are the real backstop. Good Q&A talking point.
