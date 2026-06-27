@@ -20,7 +20,8 @@ Maintained by: Asaf (PM)
 
 | Fact | Value | Source-of-truth command | Verified | Commit |
 |---|---|---|---|---|
-| offline suite | 278 pass / 1 skip / 0 fail (+46 S6; skip = DRAFT2 live-gated) | `make test` (venv active) | 2026-06-27 | stage-6-pipeline |
+| offline suite | 315 pass / 1 skip / 0 fail (+37 S7; skip = DRAFT2 live-gated) | `make test` (venv active) | 2026-06-27 | stage-7-eval |
+| eval metrics (`EVAL1`/`EVAL3`, `make eval`) | recall@k 1.0 · grounding match_rate 1.0 / raw 1.0 · routing_accuracy 1.0 · calibration auto{g5,u0}/review{g1,u0} · 6 held-out cases | `make eval` (computed; perturb→changes) | 2026-06-27 | stage-7-eval |
 | Recall@K post-refactor (`RET2`) | Recall@5 = 1.0000 (held after full-corpus BM25 index, D-S6) | `python -c "from app.eval.fixtures import load_eval_fixtures as L;from app.eval.rubric import compute_recall_at_k as C;print(C(L()))"` | 2026-06-27 | stage-6-pipeline |
 | demo behavior (`DEMO1`/`DEMO2`) | confident i1(pub,0.799)→approved→exported; i2(internal,0.861)→held pending review; i3(restricted+security,0.880)→ROUTED_HIGH_RISK→security; case_review both→ROUTED_HIGH_RISK→legal (not exported) | `make demo` (venv) | 2026-06-27 | stage-6-pipeline |
 | import-safety (`ENV4`, Stage-5 scope) | clean; lazy `_claude_client` `None` (14 modules); **no `audit/`/`exports/` dir created at import** (PM-verified) | `python -c "import app.config, app.schema, app.kb, app.retrieval, app.eval.rubric, app.eval.fixtures, app.context_stack, app.llm, app.draft, app.confidence, app.routing, app.state, app.audit, app.export"` (empty cwd, no `.env`; progressive) | 2026-06-27 | stage-5-export |

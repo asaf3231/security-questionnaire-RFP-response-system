@@ -43,9 +43,16 @@ def load_eval_fixtures() -> list[dict[str, Any]]:
         raise ValueError(f"Fixtures directory not found: {root}")
 
     fixtures: list[dict[str, Any]] = []
-    json_files = sorted(root.glob("*.json"))
+    # Only load recall@K fixture files (those whose records carry 'query' +
+    # 'relevant_chunk_ids').  eval_cases.synthetic.json (Stage 7) uses a
+    # different schema and is loaded separately by app.eval.harness.
+    all_json = sorted(root.glob("*.json"))
+    json_files = [
+        p for p in all_json
+        if p.name != "eval_cases.synthetic.json"
+    ]
     if not json_files:
-        raise ValueError(f"No .json fixture files found in {root}")
+        raise ValueError(f"No recall@K .json fixture files found in {root}")
 
     for path in json_files:
         try:

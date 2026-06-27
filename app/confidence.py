@@ -15,8 +15,17 @@ The score is the equal-weight mean of three bounded [0,1] validators:
 The rationale string is a deterministic offline template.  A live-lane LLM
 rationale is a documented future extension — not built here (no dead code).
 
+Stage 7 refactor (D-S7): coverage and retrieval_dominance are computed ONCE in
+the new private _compute_components() helper and reused by score_confidence() for
+both the numeric score and the rationale string — no duplicate calculation, no
+possible drift between the reported number and the rationale prose.
+
+_compute_score() signature is UNCHANGED (still returns float) so existing tests
+continue to pass unchanged.  score_confidence() now calls _compute_components()
+internally.
+
 CONF1 — score computed only from property validators; identical inputs → identical score.
-CONF2 — score is invariant to the rationale (computed in pure helper _compute_score()).
+CONF2 — score is invariant to the rationale (computed via _compute_score()).
 CONF3 — confidence_band() bands via §9 thresholds (no inline magic numbers).
 
 Import-safe: no side effects at import — no network, no .env, no data/* read, no
@@ -24,6 +33,8 @@ client constructed.
 """
 
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 from app.config import (
     CONFIDENCE_AUTO_THRESHOLD,
@@ -34,7 +45,87 @@ from app.schema import ConfidenceResult, RetrievedChunk
 
 
 # ---------------------------------------------------------------------------
+# Internal component carrier — avoids duplicate computation (Stage 7 refactor)
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class _ScoreComponents:
+    """The three [0,1] property-validator values, raw BM25 values, and final score.
+
+    Used internally so score_confidence() can build the rationale from the EXACT
+    same values used to compute the score — no re-deriving, no possible drift.
+    """
+    coverage: float
+    grounded_val: float
+    retrieval_dominance: float
+    score: float
+    top1: float     # top BM25 score (for the rationale)
+    top2: float     # second-highest BM25 score (for the rationale)
+
+
+# ---------------------------------------------------------------------------
+# Private components helper — single point of truth for all three validators
+# ---------------------------------------------------------------------------
+
+def _compute_components(
+    chunks: list[RetrievedChunk],
+    grounding: GroundingResult,
+    question: str,
+) -> _ScoreComponents:
+    """Compute the deterministic confidence components and their equal-weight mean.
+
+    Called by both _compute_score() (backward-compat float interface) and
+    score_confidence() (uses components for the rationale).  Single source of
+    truth for all three property validators.
+
+    This function is PURE: no I/O, no randomness, no model call.
+    """
+    # ---- Validator 1: coverage -----------------------------------------------
+    question_tokens = _significant_tokens(question)
+    if not question_tokens:
+        coverage = 1.0
+    else:
+        chunk_union_text = " ".join(
+            ((c.question + " " if c.question else "") + c.answer) for c in chunks
+        )
+        chunk_tokens = _significant_tokens(chunk_union_text)
+        overlap = question_tokens.intersection(chunk_tokens)
+        coverage = len(overlap) / len(question_tokens)
+
+    # ---- Validator 2: grounded -----------------------------------------------
+    grounded_val = 1.0 if grounding.grounded else 0.0
+
+    # ---- Validator 3: retrieval_dominance ------------------------------------
+    scores = sorted((c.bm25_score for c in chunks), reverse=True)
+    positive_scores = [s for s in scores if s > 0.0]
+
+    if len(positive_scores) == 0:
+        retrieval_dominance = 0.0
+        top1, top2 = 0.0, 0.0
+    elif len(positive_scores) == 1:
+        retrieval_dominance = 1.0
+        top1, top2 = positive_scores[0], 0.0
+    else:
+        top1, top2 = positive_scores[0], positive_scores[1]
+        total = top1 + top2
+        retrieval_dominance = top1 / total if total > 0.0 else 0.0
+
+    # ---- Equal-weight mean ---------------------------------------------------
+    score = (coverage + grounded_val + retrieval_dominance) / 3.0
+
+    return _ScoreComponents(
+        coverage=coverage,
+        grounded_val=grounded_val,
+        retrieval_dominance=retrieval_dominance,
+        score=score,
+        top1=top1,
+        top2=top2,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Pure score helper — the only place the number is produced (CONF2 contract)
+# Unchanged signature: still returns float for backward compatibility.
 # ---------------------------------------------------------------------------
 
 def _compute_score(
@@ -55,41 +146,11 @@ def _compute_score(
     This function is PURE: it reads only its arguments; no I/O, no randomness,
     no model call.  Tests prove that removing or replacing the rationale string
     does not change the value returned here (CONF2).
+
+    Delegates to _compute_components() — the single source of truth for all three
+    validators.  Signature unchanged from Stage 4 (returns float).
     """
-    # ---- Validator 1: coverage ------------------------------------------------
-    # Fraction of the question's significant tokens present in any retrieved chunk.
-    question_tokens = _significant_tokens(question)
-    if not question_tokens:
-        # Vacuously covered — no significant content to check against.
-        coverage = 1.0
-    else:
-        # Build the union of all chunk texts (include chunk question text where present).
-        chunk_union_text = " ".join(
-            ((c.question + " " if c.question else "") + c.answer) for c in chunks
-        )
-        chunk_tokens = _significant_tokens(chunk_union_text)
-        overlap = question_tokens.intersection(chunk_tokens)
-        coverage = len(overlap) / len(question_tokens)
-
-    # ---- Validator 2: grounded -----------------------------------------------
-    grounded_val = 1.0 if grounding.grounded else 0.0
-
-    # ---- Validator 3: retrieval_dominance ------------------------------------
-    # top1 / (top1 + top2).  Handles edge cases cleanly.
-    scores = sorted((c.bm25_score for c in chunks), reverse=True)
-    positive_scores = [s for s in scores if s > 0.0]
-
-    if len(positive_scores) == 0:
-        retrieval_dominance = 0.0
-    elif len(positive_scores) == 1:
-        retrieval_dominance = 1.0
-    else:
-        top1, top2 = positive_scores[0], positive_scores[1]
-        total = top1 + top2
-        retrieval_dominance = top1 / total if total > 0.0 else 0.0
-
-    # ---- Equal-weight mean ---------------------------------------------------
-    return (coverage + grounded_val + retrieval_dominance) / 3.0
+    return _compute_components(chunks, grounding, question).score
 
 
 # ---------------------------------------------------------------------------
@@ -103,12 +164,18 @@ def score_confidence(
 ) -> ConfidenceResult:
     """Compute and return the hybrid ConfidenceResult for a questionnaire item.
 
-    The numerical score comes ONLY from _compute_score() (three deterministic
-    property validators).  The LLM never touches the number (CONF1/CONF2).
+    The numerical score comes ONLY from _compute_components() → _compute_score()
+    (three deterministic property validators).  The LLM never touches the number
+    (CONF1/CONF2).
 
     The rationale is a deterministic offline template string describing the three
     signal values — no model call, no dead code (live-lane LLM rationale is a
     documented future extension that is NOT wired here).
+
+    Stage 7 refactor: coverage and retrieval_dominance are now computed ONCE via
+    _compute_components() and reused here for the rationale — no duplicate
+    calculation, no possible drift between the reported number and the rationale
+    prose (D-S7 deferred follow-up cleared).
 
     Parameters
     ----------
@@ -127,36 +194,22 @@ def score_confidence(
         .score    — float in [0, 1], purely deterministic.
         .rationale — explanatory template string; does NOT affect score or routing.
     """
-    score = _compute_score(chunks, grounding, question)
+    # Compute once; reuse for both score and rationale (Stage 7 refactor, D-S7).
+    components = _compute_components(chunks, grounding, question)
+    score = components.score
 
-    # Deterministic offline rationale — a template describing the signals.
-    # Changing or removing this string does not change .score (CONF2).
-    scores_sorted = sorted((c.bm25_score for c in chunks), reverse=True)
-    positive = [s for s in scores_sorted if s > 0.0]
-    top1 = positive[0] if positive else 0.0
-    top2 = positive[1] if len(positive) > 1 else 0.0
-
-    question_tokens = _significant_tokens(question)
-    if not question_tokens:
-        coverage_val = 1.0
-    else:
-        chunk_union_text = " ".join(
-            ((c.question + " " if c.question else "") + c.answer) for c in chunks
-        )
-        chunk_tokens = _significant_tokens(chunk_union_text)
-        overlap = question_tokens.intersection(chunk_tokens)
-        coverage_val = len(overlap) / len(question_tokens)
-
-    grounded_val_r = 1.0 if grounding.grounded else 0.0
-    rd_sum = top1 + top2
-    rd_val = (top1 / rd_sum) if rd_sum > 0.0 else 0.0
+    # Deterministic offline rationale — built from the EXACT component values
+    # used to produce the score.  Changing or removing this string does not
+    # change .score (CONF2).
+    rd_sum = components.top1 + components.top2
+    rd_val = (components.top1 / rd_sum) if rd_sum > 0.0 else 0.0
     rationale = (
         f"Confidence {score:.3f} = mean("
-        f"coverage={coverage_val:.3f}, "
-        f"grounded={grounded_val_r:.1f}, "
+        f"coverage={components.coverage:.3f}, "
+        f"grounded={components.grounded_val:.1f}, "
         f"retrieval_dominance={rd_val:.3f}"
         f"). "
-        f"Retrieved {len(chunks)} chunk(s); top BM25 score {top1:.4f}; "
+        f"Retrieved {len(chunks)} chunk(s); top BM25 score {components.top1:.4f}; "
         f"grounding gate: {'PASS' if grounding.grounded else 'FAIL'}."
     )
 

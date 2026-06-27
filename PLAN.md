@@ -52,7 +52,7 @@ Status values: ⬜ Not started · 🔄 In progress · 🟡 Awaiting verification
 | 4 | Confidence + routing + state machine | `CONF1`–`CONF3`, `ROUTE1`–`ROUTE3`, `STATUS1`–`STATUS2` | ✅ | ✅ Complete (2026-06-27; suite 179/1-skip — see FACTS) |
 | 5 | Audit log + export + hard boundary | `AUDIT1`–`AUDIT3`, `EXPORT1`–`EXPORT3`, `BOUND1`–`BOUND2` | ✅ | ✅ Complete (2026-06-27; suite 232/1-skip — see FACTS) |
 | 6 | End-to-end pipeline + the two demo cases | `PIPE1`–`PIPE2`, `DEMO1`–`DEMO2`, `RULE1`–`RULE2` | ✅ | ✅ Complete (2026-06-27; suite 278/1-skip — see FACTS) |
-| 7 | Offline evaluation harness | `EVAL1`–`EVAL3`, `RET2`, `LEAK4`–`LEAK5` | — | ⬜ Not started |
+| 7 | Offline eval harness + Option-A routing + confidence refactor | `EVAL1`–`EVAL3`, `RET2`, `LEAK4`–`LEAK5` | ✅ | ✅ Complete (2026-06-27; suite 315/1-skip — see FACTS) |
 | 8 | Anti-leakage & packaging hardening | `LEAK1`–`LEAK-S`, `PKG1`–`PKG3`, `SEC1`–`SEC2` | ✅ (+`/security-review`) | ⬜ Not started |
 | 9 | Brief/Deck + Technical Appendix | `DOC1`–`DOC2` | — | ⬜ Not started |
 
@@ -234,13 +234,21 @@ accuracy, confidence calibration — every number computed, none fabricated, no 
 **Inputs:** `CLAUDE.md` §5 (`RULE_NO_EVAL_CONTAMINATION`, `RULE_NO_FABRICATED_METRIC`); `fixtures/eval/`.
 **Outputs:** `app/eval/harness.py`, `app/eval/rubric.py`, `app/eval/fixtures.py`, `tests/`; `make eval`.
 **Definition of Done (QA: `EVAL1`–`EVAL3`, `RET2`, `LEAK4`–`LEAK5`):**
-- [ ] `EVAL1` — all metrics computed from labeled fixtures; recorded in `FACTS.md`.
-- [ ] `EVAL2` — held-out split proven; a contamination attempt fails the check
-  (`RULE_NO_EVAL_CONTAMINATION`).
-- [ ] `EVAL3` — calibration computed over the held-out set.
-- [ ] `LEAK4`/`LEAK5` — contamination + fabricated-metric cross-checks green.
-**Reviewer gate:** — (pure eval; PM's own QA suffices).
-**Status:** ⬜ Not started.
+- [x] `EVAL1` — recall@k + grounding_rate + routing_accuracy + calibration all computed from held-out
+  labeled fixtures (PM re-ran `make eval`); recorded in `FACTS.md`.
+- [x] `EVAL2` — held-out split proven; contamination injection raises (`RULE_NO_EVAL_CONTAMINATION`);
+  `run_eval` does not mutate `data/kb/*`.
+- [x] `EVAL3` — calibration matrix computed over the held-out set (auto/review × grounded/ungrounded).
+- [x] `LEAK4`/`LEAK5` — contamination + fabricated-metric (perturb→changes) cross-checks green.
+- [x] **Option A** (Asaf): internal/restricted sensitivity → `compliance` queue (`ROUTED_SENSITIVE`,
+  4th/lowest trigger) — PM-verified i2 now routes to compliance (unblocked); §9 + §5.1 synced.
+- [x] **Confidence refactor**: rationale reuses pre-computed components; **score VALUE unchanged**
+  (PM-verified i1/i2/i3 = 0.799/0.861/0.880, identical to Stage 6); CONF1–3 green.
+**Reviewer gate:** ✅ `/code-review` — **APPROVE** (routing + confidence are graded contracts). Eval
+harness at spine path `app/eval/harness.py` (Asaf wrote `app/eval_harness.py` — flagged). Existing-test
+changes scrutinized + re-verified: only the REVIEWER_QUEUES expectation + DEMO1-i2 routing (both reflect
+Asaf-approved changes); all other test files untouched.
+**Status:** ✅ Complete — PM-verified 2026-06-27; suite 315/1-skip; committed as `stage-7-eval`.
 
 ---
 

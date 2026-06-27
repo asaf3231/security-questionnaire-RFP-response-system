@@ -290,7 +290,7 @@ string constants in `app/config.py` (e.g. `RULE_NO_EXTERNAL_SEND = "RULE_NO_EXTE
 |---|---|---|---|---|
 | `RULE_GROUNDED_ONLY` | Every asserted answer cites ≥ `GROUNDING_MIN_CITATIONS` retrieved chunk; ungrounded ⇒ `UNGROUNDED_PLACEHOLDER` + route, never an invented answer | `app/draft.py` (`grounding_check`) | `GROUNDING_FAIL` | `GROUND1`, `LEAK-G` |
 | `RULE_NO_SELF_APPROVE` | The agent never transitions an item to `APPROVED`/`EXPORTED`; only a human action performs that transition | `app/state.py` (transition guard) | `SELF_APPROVE_BLOCKED` | `STATUS2`, `BOUND2` |
-| `RULE_HITM_REVIEW_TRIGGER` | Route to a human if **any**: (1) high-risk tag (`HIGH_RISK_TAGS`), (2) ambiguous/contradictory retrieval (top1−top2 gap < `AMBIGUITY_SCORE_MARGIN`, or conflicting chunks), (3) confidence < `CONFIDENCE_REVIEW_THRESHOLD` | `app/routing.py` | `ROUTED_HIGH_RISK` / `ROUTED_AMBIGUOUS` / `ROUTED_LOW_CONFIDENCE` | `ROUTE1`, `ROUTE2`, `ROUTE3` |
+| `RULE_HITM_REVIEW_TRIGGER` | Route to a human if **any** (precedence order): (1) high-risk tag (`HIGH_RISK_TAGS`), (2) ambiguous/contradictory retrieval (top1−top2 gap < `AMBIGUITY_SCORE_MARGIN`), (3) confidence < `CONFIDENCE_REVIEW_THRESHOLD`, (4) **internal/restricted sensitivity → `SENSITIVITY_REVIEW_QUEUE` ("compliance")** — Stage 7 / Option A, lowest precedence, unblocks the export gate | `app/routing.py` | `ROUTED_HIGH_RISK` / `ROUTED_AMBIGUOUS` / `ROUTED_LOW_CONFIDENCE` / `ROUTED_SENSITIVE` | `ROUTE1`, `ROUTE2`, `ROUTE3` |
 | `RULE_NO_EXTERNAL_SEND` | No code path sends a response outside the company; `export` writes to local disk only and only for `APPROVED` items | `app/export.py` | `EXTERNAL_SEND_BLOCKED` | `BOUND1` |
 | `RULE_SENSITIVITY_GATE` | A chunk/answer tagged `restricted`/`internal` never enters an export without a human `REVIEW_APPROVED` | `app/export.py` + `app/routing.py` | `SENSITIVITY_HOLD` | `LEAK-S`, `EXPORT2` |
 | `RULE_NO_SECRET` | API keys/tokens live only in untracked `.env`; never in any tracked file, log, audit record, or export | `.gitignore` + grep gate | (pre-commit) | `SEC1`, `LEAK1` |
@@ -401,8 +401,9 @@ DRAFT_TEMPERATURE           = 0.0       # determinism in the live lane
 RANDOM_SEED                 = 42        # seeds MockLLM + any sampling; the offline suite is reproducible
 
 # --- routing / queues / tags (Stages 1 & 4) ---
-REVIEWER_QUEUES             = ["security", "legal", "engineering", "gtm"]
+REVIEWER_QUEUES             = ["security", "legal", "engineering", "gtm", "compliance"]  # "compliance" added Stage 7 (Option A)
 DEFAULT_REVIEWER_QUEUE      = "engineering"  # (added Stage 4, Asaf-flagged) fallback queue when no item topic_tag maps to the routing_map; must ∈ REVIEWER_QUEUES
+SENSITIVITY_REVIEW_QUEUE    = "compliance"   # (added Stage 7, Asaf Option A) queue for the internal/restricted sensitivity routing trigger; must ∈ REVIEWER_QUEUES
 HIGH_RISK_TAGS              = ["legal", "security"]            # presence → mandatory routing
 SENSITIVITY_TAGS            = ["public", "internal", "restricted"]   # internal/restricted never auto-export
 
@@ -437,6 +438,7 @@ GROUNDING_FAIL = "GROUNDING_FAIL"          # added Stage 3 (RULE_GROUNDED_ONLY c
 ROUTED_HIGH_RISK = "ROUTED_HIGH_RISK"      # added Stage 4 (RULE_HITM_REVIEW_TRIGGER, app/routing.py)
 ROUTED_AMBIGUOUS = "ROUTED_AMBIGUOUS"      # added Stage 4 (RULE_HITM_REVIEW_TRIGGER, app/routing.py)
 ROUTED_LOW_CONFIDENCE = "ROUTED_LOW_CONFIDENCE"  # added Stage 4 (RULE_HITM_REVIEW_TRIGGER, app/routing.py)
+ROUTED_SENSITIVE = "ROUTED_SENSITIVE"            # added Stage 7 (RULE_HITM_REVIEW_TRIGGER trigger 4 — internal/restricted → compliance, app/routing.py)
 SELF_APPROVE_BLOCKED = "SELF_APPROVE_BLOCKED"    # added Stage 4 (RULE_NO_SELF_APPROVE, app/state.py)
 SENSITIVITY_HOLD = "SENSITIVITY_HOLD"            # added Stage 5 (RULE_SENSITIVITY_GATE, app/export.py)
 EXTERNAL_SEND_BLOCKED = "EXTERNAL_SEND_BLOCKED"  # added Stage 5 (RULE_NO_EXTERNAL_SEND affirmative, app/export.py)

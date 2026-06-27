@@ -5,10 +5,12 @@ Responsibility: given a questionnaire item, its retrieved chunks, the confidence
 result, and the loaded policy_tags, decide whether to route the item for human
 review and to which queue — and why.
 
-Three routing triggers (first match sets the reason_code — precedence enforced):
+Four routing triggers (first match sets the reason_code — precedence enforced):
   1. High-risk tag   — item.topic_tags ∩ high_risk_tags → ROUTED_HIGH_RISK
   2. Ambiguity       — top1−top2 BM25 gap < AMBIGUITY_SCORE_MARGIN → ROUTED_AMBIGUOUS
   3. Low confidence  — score < CONFIDENCE_REVIEW_THRESHOLD → ROUTED_LOW_CONFIDENCE
+  4. Sensitivity     — any chunk sensitivity ∈ {internal, restricted} → ROUTED_SENSITIVE
+                       (lowest precedence; only fires when triggers 1–3 did not)
 
 Queue resolution for triggers 2/3:
   - Iterate item.topic_tags in declaration order; return the first tag that has an
@@ -40,8 +42,14 @@ from app.config import (
     ROUTED_AMBIGUOUS,
     ROUTED_HIGH_RISK,
     ROUTED_LOW_CONFIDENCE,
+    ROUTED_SENSITIVE,
     RULE_HITM_REVIEW_TRIGGER,
+    SENSITIVITY_REVIEW_QUEUE,
 )
+
+# The set of sensitivity values that trigger the 4th (lowest-priority) routing trigger.
+# Named constant — no inline literal (CLAUDE.md §8 / brief §1 guidance).
+_SENSITIVE_VALUES: frozenset[str] = frozenset({"internal", "restricted"})
 from app.schema import ConfidenceResult, QuestionnaireItem, RetrievedChunk, RoutingDecision
 
 
@@ -90,9 +98,11 @@ def route_for_review(
     Returns a RoutingDecision with should_route, queue, reason_code, and rule.
 
     Trigger precedence:
-      1. High-risk tag  (ROUTED_HIGH_RISK)  — checked first; ignores score.
-      2. Ambiguity      (ROUTED_AMBIGUOUS)  — top1−top2 gap < AMBIGUITY_SCORE_MARGIN.
+      1. High-risk tag  (ROUTED_HIGH_RISK)    — checked first; ignores score.
+      2. Ambiguity      (ROUTED_AMBIGUOUS)    — top1−top2 gap < AMBIGUITY_SCORE_MARGIN.
       3. Low confidence (ROUTED_LOW_CONFIDENCE) — score < CONFIDENCE_REVIEW_THRESHOLD.
+      4. Sensitivity    (ROUTED_SENSITIVE)    — any chunk sensitivity ∈ {internal, restricted};
+                                               lowest precedence (fires only if 1–3 did not).
 
     When no trigger fires → RoutingDecision(should_route=False, queue=None, ...).
 
@@ -156,6 +166,18 @@ def route_for_review(
             should_route=True,
             queue=queue,
             reason_code=ROUTED_LOW_CONFIDENCE,
+            rule=RULE_HITM_REVIEW_TRIGGER,
+        )
+
+    # ---- Trigger 4: Sensitivity (lowest precedence) -------------------------
+    # If any retrieved chunk carries a sensitivity that warrants human review
+    # (internal or restricted) and none of the higher-priority triggers fired,
+    # route to the sensitivity reviewer queue.
+    if any(c.sensitivity in _SENSITIVE_VALUES for c in chunks):
+        return RoutingDecision(
+            should_route=True,
+            queue=SENSITIVITY_REVIEW_QUEUE,
+            reason_code=ROUTED_SENSITIVE,
             rule=RULE_HITM_REVIEW_TRIGGER,
         )
 

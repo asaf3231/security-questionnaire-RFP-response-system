@@ -6,11 +6,9 @@
 #   test       — run the offline deterministic pytest suite (no .env, no network)
 #   demo       — mocked end-to-end pipeline (MockLLM, no network)
 #   demo-live  — gated live Claude draft (requires ANTHROPIC_API_KEY; still no external send)
-#
-# Later stages will add:
-#   eval       — offline deterministic evaluation harness
+#   eval       — offline deterministic evaluation harness (computed metrics; no network)
 
-.PHONY: install test demo demo-live
+.PHONY: install test demo demo-live eval
 
 install:
 	pip install -r requirements.txt
@@ -23,3 +21,6 @@ demo:
 
 demo-live:
 	python scripts/run_live_draft.py
+
+eval:
+	python -m app.eval.harness

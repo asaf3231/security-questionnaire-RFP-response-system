@@ -111,6 +111,30 @@ Seven concrete, grep/test-enforced failures, each a `RULE_*`: (1) grounding/hall
 
 ## Stage decisions
 
+### D-S7 — Stage 7 design (2026-06-27; Asaf Option A + PM design; flagged at boundary)
+- **Option A — sensitivity routing (Asaf decision):** internal/restricted sensitivity now **triggers
+  routing** (4th, LOWEST-precedence trigger in `route_for_review`, after high-risk → ambiguity →
+  low-confidence): if any retrieved chunk's `sensitivity ∈ {internal, restricted}` and nothing
+  higher-priority fired → route to `SENSITIVITY_REVIEW_QUEUE = "compliance"` with reason
+  `ROUTED_SENSITIVE`. Unblocks the export limbo (i2 now routes → reviewer can REVIEW_APPROVE → export).
+  Keys on the **retrieved** chunks' sensitivities (conservative superset of the cited-chunk export gate;
+  never leaves a sensitive item unrouted) — no `route_for_review` signature change.
+- **NEW §9 (Asaf-authorized graded change):** `REVIEWER_QUEUES += "compliance"`;
+  `SENSITIVITY_REVIEW_QUEUE = "compliance"`; `ROUTED_SENSITIVE = "ROUTED_SENSITIVE"`. PM also syncs the
+  §5.1 `RULE_HITM_REVIEW_TRIGGER` row to list the 4th trigger.
+- **Test impact (verifier-independence under an APPROVED change):** `test_stage6.py::test_demo1_i1_i2_not_routed`
+  asserts i2 NOT routed — under Option A, i2 (internal) now routes to compliance, so that expectation
+  legitimately changes (split into i1-not-routed + i2-routed-to-compliance). This is a mechanical update
+  reflecting Asaf's approved behavior, NOT a weakening; the PM scrutinizes the diff + re-runs at pre-edit.
+  `ROUTE3` benign test only changes IF its item's chunks are sensitive (verify; likely public → unaffected).
+- **Confidence refactor:** `_compute_score` returns its components; `score_confidence` reuses them for
+  the rationale (no duplicate calc) — the score **VALUE is unchanged** (CONF1–3 stay green; demo/Recall
+  numbers unchanged). Clears the deferred S4 follow-up.
+- **Eval harness path:** placed at the spine §2 path **`app/eval/harness.py`** (consistent with the
+  existing `app/eval/` package: rubric.py + fixtures.py). Asaf wrote `app/eval_harness.py` — flag if the
+  flat name is preferred. `make eval` runs it. Metrics computed from held-out fixtures (LEAK5); isolation
+  enforced so eval fixtures never mutate the production KB (LEAK4).
+
 ### FIX-SEC1 — SEC1 was red since stage-5-export; PM QA miss owned + fixed (2026-06-27)
 **What:** `tests/test_stage5.py` embedded **literal** key-shaped fixtures (`sk-ant-ABCDEF…`, 24 chars) to
 exercise `redact()`. The SEC1 scanner (`sk-ant-[A-Za-z0-9_-]{20,}` over the tracked set, `test_stage1.py`)
@@ -229,6 +253,18 @@ Stage 3 ✅ — handbacks/stage-3.md · verdict APPROVE (no findings; D-S3 const
 Stage 4 ✅ — handbacks/stage-4.md · verdict APPROVE (D-S4 constants added+synced; 1 minor deferred) · tag stage-4-routing
 Stage 5 ✅ — handbacks/stage-5.md · verdict APPROVE (no findings; D-S5 schema+reason-codes added+synced) · tag stage-5-export
 Stage 6 ✅ — handbacks/stage-6.md · verdict APPROVE (no correctness findings; Recall@K held 1.0; ERROR_TERMINAL synced) · tag stage-6-pipeline
+Stage 7 ✅ — handbacks/stage-7.md · verdict APPROVE (Option A: i2→compliance; confidence refactor score-unchanged; eval computed/held-out) · tag stage-7-eval
+
+### D-S7 status (2026-06-27) — IMPLEMENTED & PM-verified
+Option A live (i2→`compliance`/`ROUTED_SENSITIVE`, lowest trigger; §9+§5.1 synced). Confidence
+refactored (rationale reuses `_compute_components`; **score VALUE unchanged** — i1/i2/i3 0.799/0.861/0.880
+identical to S6). Eval harness `app/eval/harness.py` + `make eval`: recall 1.0 / grounding 1.0 /
+routing_accuracy 1.0 / calibration matrix, all computed + held-out (contamination injection raises; KB
+not mutated). Suite 315/1. **Verifier-independence:** only `test_stage1` REVIEWER_QUEUES expectation +
+`test_stage6` DEMO1-i2 routing changed (both reflect Asaf-approved changes; diffs scrutinized, no
+unrelated weakening; test_stage2/3/4/5 untouched). **Process nit:** executer edited `test_stage1` without
+flagging per brief — benign (correct, necessary, documented). **Flag:** eval path is `app/eval/harness.py`
+(Asaf wrote `app/eval_harness.py`).
 
 ### D-S6 status (2026-06-27) — IMPLEMENTED & PM-verified + OPEN design question for Asaf
 Pipeline + Retriever(build-once, full-corpus IDF) + demo scripts landed; PM-verified suite 278/1,

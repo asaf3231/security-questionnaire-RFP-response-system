@@ -70,3 +70,39 @@ for internal/restricted, NOTES D-S6), then brief **Stage 7** (offline eval harne
 Watch out for / open: SEC1-miss owned (process lesson: grep pytest summary for `failed`, not just the
 pass line); sensitivity route-vs-gate design question; full-corpus retrieval semantics; `make demo`/`test`
 need venv (Stage-8 packaging); confidence-rationale dup (S7).
+
+## 2026-06-27 17:50 — [BACKEND] SESSION START
+Picking up: **Stage 6 ✅ verified & locked by Asaf**; **Asaf decided Option A** (internal/restricted →
+route to `compliance` queue). Authorized to execute **Stage 7** (eval harness + Option-A routing fix +
+confidence refactor) under the autonomous loop, then HALT at the Stage 7 boundary.
+State as read (to re-verify): suite 278/1 (`stage-6-pipeline`); Recall@5 1.0. Asaf's Stage 7 reqs:
+(1) routing.py — internal/restricted sensitivity → `compliance` queue if not already routed (4th, lowest
+trigger, unblocks export); (2) confidence.py — refactor so the rationale reuses pre-computed
+coverage/dominance (no duplicate calc; score VALUE unchanged); (3) eval harness — Recall@K + grounding
+rate + routing accuracy + calibration (EVAL1–EVAL3); (4) strict data isolation (LEAK4–LEAK5) + `make eval`.
+Plan for this session: D-S7 design note (§9 additions: compliance queue + ROUTED_SENSITIVE; eval path
+note; test-impact = DEMO1 i2 expectation updates under Option A — PM scrutinizes every test diff,
+re-runs at pre-edit); write `briefs/stage-7.md`; spawn cold executer (Sonnet); PM re-runs suite + `make
+eval` + EVAL/LEAK + verifier-independence; `/code-review` (routing+confidence graded); sync §9+§5.1;
+record FACTS; mark Stage 7; commit `stage-7-eval`; HALT + handback. Do not advance to Stage 8.
+
+## 2026-06-27 18:15 — [BACKEND] SESSION END / HANDOFF
+Did: **Stage 7 executed via the autonomous loop and PM-verified ✅.** Executer implemented Asaf's
+**Option A** (routing.py 4th/lowest sensitivity trigger → `compliance`/`ROUTED_SENSITIVE`), refactored
+confidence.py (rationale reuses `_compute_components`; score VALUE unchanged), built `app/eval/harness.py`
+(+ `fixtures/eval/eval_cases.synthetic.json`, `make eval`), + 3 §9 constants. PM independent QA: suite
+**315 pass / 1 skip** (re-run); **eval** recall/grounding/routing_accuracy 1.0 + calibration (re-ran
+`run_eval`); **Option A verified** (i2→compliance, unblocked); **confidence scores identical to S6**
+(0.799/0.861/0.880 — refactor preserved values); contamination injection raises + KB unmutated.
+**Verifier-independence:** scrutinized every existing-test diff vs stage-6-pipeline — test_stage2/3/4/5
+UNTOUCHED; only `test_stage1` REVIEWER_QUEUES expectation (+compliance) + `test_stage6` DEMO1-i2 routing
+changed, both mechanical reflections of Asaf-approved changes (removed asserts = exactly the old i2
+"not routed" expectations; no unrelated weakening). **Process nit:** executer edited test_stage1 without
+flagging per brief — benign. **`/code-review`: APPROVE**, no findings. Synced §9 + §5.1
+(RULE_HITM_REVIEW_TRIGGER now 4 triggers). Committed `stage-7-eval`.
+Status now: ✅ Stage 7 complete, committed. Suite 315/1-skip. **HALTED at the Stage 7 boundary per Asaf.**
+Next PM should: get Asaf's go-ahead, then brief **Stage 8** (anti-leakage & packaging hardening +
+`/security-review` gate; `LEAK1`–`LEAK-S`, `PKG1`–`PKG3`) — incl. fixing the Makefile venv dependency
+(robust `make demo`/`test`/`eval`) + tracking one redacted sample export/audit. Reviewer gate + security gate fire.
+Watch out for / open: eval path app/eval/harness.py (vs Asaf's app/eval_harness.py — flag); Makefile-needs-venv
+(Stage-8); SEC1-miss process lesson; Option A live. No open code follow-ups (confidence dup cleared).

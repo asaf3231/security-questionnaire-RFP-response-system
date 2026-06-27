@@ -10,7 +10,8 @@ Deterministic: MockLLM (seeded) under a fixed corpus; tmp_path for all file I/O.
 QA check mapping:
   PIPE1  — full happy path: run_pipeline() produces a ResponseDoc, deterministic under MockLLM
   PIPE2  — safe terminal: injected failure → ROUTED_FOR_REVIEW + ERROR_TERMINAL; no exception
-  DEMO1  — case_confident: high confidence, grounded, i1/i2 not routed; i3 ROUTED_HIGH_RISK
+  DEMO1  — case_confident: i1 (public) not routed; i2 (internal) routed→compliance/ROUTED_SENSITIVE
+           (Option-A sensitivity trigger, D-S7); i3 ROUTED_HIGH_RISK (security tag)
   DEMO2  — case_review: RULE_HITM_REVIEW_TRIGGER fires; ROUTED_FOR_REVIEW; REVIEW_BANNER present
   RULE1  — every RULE_* in config.py is referenced at its §5.1 chokepoint module
   RULE2  — a pipeline run writes each expected reason-code to the audit log
@@ -468,8 +469,11 @@ class TestPIPE2:
 # ---------------------------------------------------------------------------
 
 class TestDEMO1:
-    """DEMO1: case_confident produces confident drafts for i1/i2 and
-    routes i3 via ROUTED_HIGH_RISK (defense-in-depth showcase).
+    """DEMO1: case_confident routes as follows under Option-A (D-S7, Stage 7):
+      i1 (public chunks)   — NOT routed; confident auto-draft.
+      i2 (retrieves internal kb-009) — routed→compliance / ROUTED_SENSITIVE
+         (4th trigger: sensitivity, lowest precedence; no high-risk tag on i2).
+      i3 (security tag)    — ROUTED_HIGH_RISK→security (defense-in-depth showcase).
     """
 
     def setup_method(self):
@@ -491,22 +495,60 @@ class TestDEMO1:
         assert result is not None
         assert result.errors == {}
 
-    def test_demo1_i1_i2_not_routed(self, tmp_path):
-        """DEMO1: items i1 and i2 should NOT trigger routing (no high-risk tag, high confidence)."""
+    def test_demo1_i1_not_routed(self, tmp_path):
+        """DEMO1: item i1 (public chunks only) is NOT routed — confident auto-draft.
+
+        i1 topic_tags: [encryption, infrastructure, data-handling]; all retrieved
+        chunks are public-sensitivity → no sensitivity trigger; no high-risk tag;
+        high confidence + clear retrieval → no trigger fires.
+        """
         q = _load_real_questionnaire("case_confident.synthetic.json")
         result = _run_real_pipeline(q, tmp_path)
 
-        # i1 and i2 should not be routed
-        for item in result.response_doc.items:
-            if item.item_id in ("q-confident-001-i1", "q-confident-001-i2"):
-                routing = result.routing.get(item.item_id)
-                assert not routing.should_route, (
-                    f"{item.item_id} should NOT be routed but was: "
-                    f"reason={routing.reason_code}, queue={routing.queue}"
-                )
-                assert item.status == "SCORED", (
-                    f"{item.item_id} should be at SCORED, got {item.status}"
-                )
+        routing_i1 = result.routing.get("q-confident-001-i1")
+        assert routing_i1 is not None, "Routing decision missing for i1"
+        assert not routing_i1.should_route, (
+            f"i1 should NOT be routed but was: "
+            f"reason={routing_i1.reason_code}, queue={routing_i1.queue}"
+        )
+        item_i1 = next(
+            it for it in result.response_doc.items
+            if it.item_id == "q-confident-001-i1"
+        )
+        assert item_i1.status == "SCORED", (
+            f"i1 should be at SCORED, got {item_i1.status}"
+        )
+
+    def test_demo1_i2_routed_compliance(self, tmp_path):
+        """DEMO1: item i2 (internal kb-009 in retrieved chunks) routes → compliance/ROUTED_SENSITIVE.
+
+        Option-A (D-S7, Stage 7): the 4th, lowest-precedence sensitivity trigger fires
+        because i2's retrieval set includes kb-009 (sensitivity=internal).
+        i2 has no high-risk tag, is not ambiguous, and is not low-confidence —
+        so triggers 1–3 do not fire; the sensitivity trigger (trigger 4) does.
+        """
+        from app.config import ROUTED_SENSITIVE, SENSITIVITY_REVIEW_QUEUE
+        q = _load_real_questionnaire("case_confident.synthetic.json")
+        result = _run_real_pipeline(q, tmp_path)
+
+        routing_i2 = result.routing.get("q-confident-001-i2")
+        assert routing_i2 is not None, "Routing decision missing for i2"
+        assert routing_i2.should_route, (
+            "i2 should be routed (internal chunk retrieved) under Option-A"
+        )
+        assert routing_i2.reason_code == ROUTED_SENSITIVE, (
+            f"i2 should route with ROUTED_SENSITIVE, got {routing_i2.reason_code!r}"
+        )
+        assert routing_i2.queue == SENSITIVITY_REVIEW_QUEUE, (
+            f"i2 should route to {SENSITIVITY_REVIEW_QUEUE!r}, got {routing_i2.queue!r}"
+        )
+        item_i2 = next(
+            it for it in result.response_doc.items
+            if it.item_id == "q-confident-001-i2"
+        )
+        assert item_i2.status == "ROUTED_FOR_REVIEW", (
+            f"i2 should be ROUTED_FOR_REVIEW, got {item_i2.status}"
+        )
 
     def test_demo1_i3_routed_high_risk(self, tmp_path):
         """DEMO1: item i3 (security tag) is ROUTED_HIGH_RISK→security queue."""
@@ -525,7 +567,12 @@ class TestDEMO1:
         assert i3.status == "ROUTED_FOR_REVIEW"
 
     def test_demo1_i1_i2_grounded_drafts(self, tmp_path):
-        """DEMO1: i1 and i2 should have grounded draft_text (not UNGROUNDED_PLACEHOLDER)."""
+        """DEMO1: i1 and i2 should have grounded draft_text (not UNGROUNDED_PLACEHOLDER).
+
+        Both i1 and i2 have strong KB coverage so the grounding gate passes even
+        though i2 is subsequently routed for sensitivity.  The draft is grounded
+        BEFORE routing is evaluated; routing does not affect the draft text.
+        """
         from app.config import UNGROUNDED_PLACEHOLDER
         q = _load_real_questionnaire("case_confident.synthetic.json")
         result = _run_real_pipeline(q, tmp_path)
@@ -550,22 +597,27 @@ class TestDEMO1:
                 f"Agent exported item {item.item_id} — RULE_NO_SELF_APPROVE violated"
             )
 
-    def test_demo1_rule_hitm_not_fired_for_i1_i2(self, tmp_path):
-        """DEMO1: RULE_HITM_REVIEW_TRIGGER does not fire for i1/i2 (no routing)."""
+    def test_demo1_rule_hitm_not_fired_for_i1(self, tmp_path):
+        """DEMO1: RULE_HITM_REVIEW_TRIGGER does not fire for i1 (public chunks, no routing).
+
+        Under Option-A (D-S7), i2 now routes via ROUTED_SENSITIVE so
+        RULE_HITM_REVIEW_TRIGGER DOES fire for i2.  Only i1 stays unrouted.
+        """
         q = _load_real_questionnaire("case_confident.synthetic.json")
         result = _run_real_pipeline(q, tmp_path)
 
         audit_path = tmp_path / "audit.jsonl"
         events = [json.loads(line) for line in audit_path.read_text().splitlines()]
 
-        for item_id in ("q-confident-001-i1", "q-confident-001-i2"):
-            routing_events = [
-                e for e in events
-                if e["item_id"] == item_id and e.get("rule") == "RULE_HITM_REVIEW_TRIGGER"
-            ]
-            assert not routing_events, (
-                f"RULE_HITM_REVIEW_TRIGGER should NOT fire for {item_id}"
-            )
+        # i1 only — i2 now routed (Option-A sensitivity trigger)
+        routing_events_i1 = [
+            e for e in events
+            if e["item_id"] == "q-confident-001-i1"
+            and e.get("rule") == "RULE_HITM_REVIEW_TRIGGER"
+        ]
+        assert not routing_events_i1, (
+            "RULE_HITM_REVIEW_TRIGGER should NOT fire for q-confident-001-i1"
+        )
 
 
 def _run_real_pipeline(questionnaire, tmp_path, provider=None):

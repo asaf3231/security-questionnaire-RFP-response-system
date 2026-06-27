@@ -245,8 +245,9 @@ class TestConfigConstants:
         assert self.cfg.HIGH_RISK_TAGS == ["legal", "security"]
 
     def test_reviewer_queues(self):
-        """REVIEWER_QUEUES must be exactly ['security', 'legal', 'engineering', 'gtm']."""
-        assert self.cfg.REVIEWER_QUEUES == ["security", "legal", "engineering", "gtm"]
+        """REVIEWER_QUEUES must include all five queues (Stage 7 adds 'compliance' — D-S7)."""
+        # Stage 7 (Asaf-authorized): 'compliance' appended for sensitivity routing (Option A).
+        assert self.cfg.REVIEWER_QUEUES == ["security", "legal", "engineering", "gtm", "compliance"]
 
     def test_item_states(self):
         """ITEM_STATES must match CLAUDE.md §9 exactly."""

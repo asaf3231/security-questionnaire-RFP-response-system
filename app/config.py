@@ -71,7 +71,11 @@ RANDOM_SEED: int = 42   # seeds MockLLM + any sampling; the offline suite is rep
 # ---------------------------------------------------------------------------
 # Routing / queues / tags (Stages 1 & 4)
 # ---------------------------------------------------------------------------
-REVIEWER_QUEUES: list[str] = ["security", "legal", "engineering", "gtm"]
+REVIEWER_QUEUES: list[str] = ["security", "legal", "engineering", "gtm", "compliance"]
+
+# Stage 7 — Option-A sensitivity routing (Asaf-authorized graded additions)
+SENSITIVITY_REVIEW_QUEUE: str = "compliance"  # must ∈ REVIEWER_QUEUES
+ROUTED_SENSITIVE: str = "ROUTED_SENSITIVE"    # 4th RULE_HITM_REVIEW_TRIGGER reason-code
 HIGH_RISK_TAGS: list[str] = ["legal", "security"]              # presence → mandatory routing
 SENSITIVITY_TAGS: list[str] = ["public", "internal", "restricted"]  # internal/restricted never auto-export
 

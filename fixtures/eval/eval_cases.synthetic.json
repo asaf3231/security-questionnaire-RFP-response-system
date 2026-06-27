@@ -1,0 +1,62 @@
+[
+  {
+    "item_id": "eval-001",
+    "question": "Does your platform encrypt data at rest, and if so, what encryption standard do you use?",
+    "topic_tags": ["encryption", "infrastructure", "data-handling"],
+    "expected_routed": false,
+    "expected_queue": null,
+    "expected_reason": null,
+    "expected_grounded": true,
+    "note": "Public-only coverage; strong KB hit (kb-001); confident auto-draft case."
+  },
+  {
+    "item_id": "eval-006",
+    "question": "Can you provide a detailed breakdown of your quantum-resistant cryptographic roadmap?",
+    "topic_tags": ["encryption"],
+    "expected_routed": false,
+    "expected_queue": null,
+    "expected_reason": null,
+    "expected_grounded": true,
+    "note": "Weak KB coverage for quantum cryptography; score in mid-band (review) but above CONFIDENCE_REVIEW_THRESHOLD so not routed. Tests calibration review band."
+  },
+  {
+    "item_id": "eval-002",
+    "question": "Do you carry cyber liability insurance?",
+    "topic_tags": ["legal", "compliance"],
+    "expected_routed": true,
+    "expected_queue": "legal",
+    "expected_reason": "ROUTED_HIGH_RISK",
+    "expected_grounded": true,
+    "note": "Legal tag → ROUTED_HIGH_RISK; high-risk trigger (trigger 1) fires."
+  },
+  {
+    "item_id": "eval-003",
+    "question": "What indemnification provisions apply if a security breach originates from your platform?",
+    "topic_tags": ["legal", "security"],
+    "expected_routed": true,
+    "expected_queue": "legal",
+    "expected_reason": "ROUTED_HIGH_RISK",
+    "expected_grounded": true,
+    "note": "Legal + security tags → ROUTED_HIGH_RISK to legal queue. Question rephrased from KB chunk to avoid contamination (RULE_NO_EVAL_CONTAMINATION)."
+  },
+  {
+    "item_id": "eval-004",
+    "question": "Is data in transit encrypted and what protocol versions are supported?",
+    "topic_tags": ["encryption", "infrastructure", "network-security"],
+    "expected_routed": true,
+    "expected_queue": "compliance",
+    "expected_reason": "ROUTED_SENSITIVE",
+    "expected_grounded": true,
+    "note": "No high-risk tag; retrieval includes kb-009 (internal) → sensitivity trigger (trigger 4); Option-A."
+  },
+  {
+    "item_id": "eval-005",
+    "question": "What is your SOC 2 Type II certification status?",
+    "topic_tags": ["compliance", "certification"],
+    "expected_routed": true,
+    "expected_queue": "compliance",
+    "expected_reason": "ROUTED_SENSITIVE",
+    "expected_grounded": true,
+    "note": "No high-risk tag; retrieval includes kb-010 + kb-009 (internal) → sensitivity trigger (trigger 4); Option-A."
+  }
+]
