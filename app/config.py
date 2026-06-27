@@ -44,6 +44,18 @@ GROUNDING_COVERAGE_MIN: float = 0.5   # fraction of draft's significant content 
 GROUNDING_FAIL: str = "GROUNDING_FAIL"  # §5.1 audit reason-code emitted at app/draft.py chokepoint
 
 # ---------------------------------------------------------------------------
+# Stage 4 audit reason-codes (§5.1) — RULE_HITM_REVIEW_TRIGGER + RULE_NO_SELF_APPROVE
+# ---------------------------------------------------------------------------
+ROUTED_HIGH_RISK: str = "ROUTED_HIGH_RISK"          # high-risk tag trigger (app/routing.py)
+ROUTED_AMBIGUOUS: str = "ROUTED_AMBIGUOUS"           # ambiguity trigger (app/routing.py)
+ROUTED_LOW_CONFIDENCE: str = "ROUTED_LOW_CONFIDENCE" # low-confidence trigger (app/routing.py)
+SELF_APPROVE_BLOCKED: str = "SELF_APPROVE_BLOCKED"   # agent self-approve blocked (app/state.py)
+
+# Fallback reviewer queue when no item topic_tag maps to the policy routing_map
+# Must be ∈ REVIEWER_QUEUES; kept in §9 (not in data) — avoids editing Stage-1 fixtures (D-S4).
+DEFAULT_REVIEWER_QUEUE: str = "engineering"
+
+# ---------------------------------------------------------------------------
 # Determinism
 # ---------------------------------------------------------------------------
 RANDOM_SEED: int = 42   # seeds MockLLM + any sampling; the offline suite is reproducible

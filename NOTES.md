@@ -111,6 +111,26 @@ Seven concrete, grep/test-enforced failures, each a `RULE_*`: (1) grounding/hall
 
 ## Stage decisions
 
+### D-S4 — Stage 4 confidence/routing/state design (2026-06-27, PM; flagged for Asaf at boundary)
+- **Confidence number = mean of three bounded property validators** — `coverage` (fraction of the
+  question's significant tokens present in retrieved chunks), `grounded` (1.0/0.0 from the Stage-3
+  gate), `retrieval_dominance` (top1/(top1+top2), a clean [0,1] signal). Equal-weight mean (not a
+  "magic weight" — just the average) → **no new weight constants.** The **LLM never sets the number**;
+  the offline rationale is a deterministic template (live-lane LLM rationale is a documented extension,
+  not built now → no dead code). `confidence_band(score)` bands via existing §9 thresholds.
+- **Routing precedence** (first match sets the reason-code): high-risk tag → ambiguity → low-confidence.
+  Queue resolved from the `policy_tags` routing_map over the item's tags; fallback = `DEFAULT_REVIEWER_QUEUE`.
+- **State machine** — agent may only advance up to `ROUTED_FOR_REVIEW`; `HUMAN_ONLY_TARGETS`
+  = {REVIEW_APPROVED, REVIEW_REJECTED, APPROVED, EXPORTED}. Agent→any human-only target is **blocked**
+  (`SELF_APPROVE_BLOCKED`, `RULE_NO_SELF_APPROVE`); illegal edges raise `InvalidTransition`.
+- **NEW §9 additions (Asaf-flagged):** `DEFAULT_REVIEWER_QUEUE = "engineering"` (genuinely new —
+  fallback queue, kept in §9 not hardcoded inline, and not in data to avoid editing Stage-1 tests/
+  fixtures = verifier-independence-safe) + materialized §5.1 reason-codes `ROUTED_HIGH_RISK` /
+  `ROUTED_AMBIGUOUS` / `ROUTED_LOW_CONFIDENCE` / `SELF_APPROVE_BLOCKED` (implementing the spec, not new
+  decisions). **Why:** routing needs a safe fallback queue + the reason-code vocabulary. **How to apply:**
+  synced config↔§9; surfaced at the boundary for Asaf (retune `DEFAULT_REVIEWER_QUEUE` if desired).
+
+
 ### D-S3 — Stage 3 grounding + context-stack design (2026-06-27, PM; flagged for Asaf at the boundary)
 - **Citations carry chunk_ids via the Retrieval layer.** `assemble_context` formats each Retrieval-layer
   entry as `"[<chunk_id>] <chunk text>"` so `draft_answer` can cite by id while the layer still holds
@@ -151,6 +171,25 @@ Stage 0 ✅ — spine genesis (PM-authored) · commit abb793a · tag stage-0-spi
 Stage 1 ✅ — handbacks/stage-1.md · verdict APPROVE (1 finding fixed, SEC1 edit accepted) · tag stage-1-env
 Stage 2 ✅ — handbacks/stage-2.md · verdict APPROVE (no findings; Recall@5=1.0 computed) · tag stage-2-retrieval
 Stage 3 ✅ — handbacks/stage-3.md · verdict APPROVE (no findings; D-S3 constants added+synced to §9) · tag stage-3-draft
+Stage 4 ✅ — handbacks/stage-4.md · verdict APPROVE (D-S4 constants added+synced; 1 minor deferred) · tag stage-4-routing
+
+### D-S4 status (2026-06-27) — IMPLEMENTED & PM-verified
+The 5 new constants landed in `app/config.py` **and** synced into `CLAUDE.md` §9
+(`DEFAULT_REVIEWER_QUEUE` + 4 §5.1 reason-codes). Confidence number verified model-independent +
+invariant to rationale; routing precedence + queue-from-policy-map verified; state machine blocks agent
+self-approve (`SELF_APPROVE_BLOCKED`) and allows `actor="human"`. **Real-data routing characterized**
+(see FACTS "demo routing"): case_confident i1/i2 = clean auto-drafts; case_review = ROUTED_HIGH_RISK→legal.
+
+### Stage 4 reviewer-gate follow-ups
+- **Stage 7 (deferred minor):** `confidence.py` rebuilds coverage/dominance in the rationale builder
+  (duplicate of `_compute_score`) — refactor `_compute_score` to return components so the rationale
+  reuses them (avoids drift; the rationale is an audit-trust artifact).
+- **Stage 6 (demo design):** `case_confident-i3` carries a `security` high-risk tag → it routes
+  (ROUTED_HIGH_RISK→security). For a clean DEMO1, the Stage-6 brief should either showcase i1/i2 as the
+  confident auto-drafts (and present i3 as a bonus "routing fires even inside the confident set"), or
+  retune i3's tags. **Decision deferred to the Stage-6 brief / Asaf.**
+- **Documented (not a defect):** ambiguity trigger uses an absolute BM25 gap vs `AMBIGUITY_SCORE_MARGIN`;
+  fine for this corpus (real gaps ~6), but a normalized gap would be more robust at scale (Q&A point).
 
 ### D-S3 status (2026-06-27) — IMPLEMENTED & PM-verified
 The two new constants landed in `app/config.py` **and** were synced into `CLAUDE.md` §9

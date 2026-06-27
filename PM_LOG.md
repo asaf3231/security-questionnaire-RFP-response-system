@@ -149,3 +149,40 @@ reason-codes Stage 4 needs. Graded contracts → reviewer gate fires.
 Watch out for / open: the two NEW §9 constants are flagged for Asaf's review (revert/retune if
 desired); grounding is lexical not semantic (known limitation); Stage 6 BM25-rebuild efficiency
 follow-up still open; `make test` needs venv.
+
+## 2026-06-27 14:55 — [BACKEND] SESSION START
+Picking up: **Stage 3 ✅ verified & locked by Asaf** (grounding trade-off approved as a Q&A asset);
+authorized to execute **Stage 4** (confidence + routing + state machine) under the autonomous loop,
+then HALT at the Stage 4 boundary for Asaf.
+State as read (to re-verify): suite 116/1-skip (`stage-3-draft`); §9 thresholds + queues + ITEM_STATES
+present. Asaf's Stage 4 reqs: (1) hybrid confidence — number from property validators (retrieval
+quality/coverage/grounding), LLM rationale ONLY, threshold banding from config; (2) routing engine —
+the 3 `RULE_HITM_REVIEW_TRIGGER` triggers (high-risk tag / ambiguity / score < review threshold) →
+reviewer queues; (3) state machine — legal `ITEM_STATES` transitions, rigid `RULE_NO_SELF_APPROVE`
+boundary (agent can never auto-transition to approved/final), explicit errors on invalid transitions.
+Plan for this session: write `briefs/stage-4.md` (incl. D-S4 design + the §9 additions:
+`DEFAULT_REVIEWER_QUEUE` + 4 reason-codes); spawn cold `general-purpose` executer (Sonnet); PM re-runs
+`CONF*`/`ROUTE*`/`STATUS*` + score-is-deterministic + self-approve-blocked independently; `/code-review`
+gate; record FACTS; mark Stage 4; commit `stage-4-routing`; HALT + handback. Do not advance to Stage 5.
+
+## 2026-06-27 15:25 — [BACKEND] SESSION END / HANDOFF
+Did: **Stage 4 executed via the autonomous loop and PM-verified ✅.** (Note: the first executer spawn
+was user-interrupted but had already written the files; the re-spawned executer found them present,
+verified, and handed back — PM re-verified everything from scratch regardless of provenance.) Modules:
+`app/confidence.py` (hybrid: deterministic 3-validator score + template rationale; LLM never sets the
+number), `app/routing.py` (3 triggers, precedence high-risk→ambiguity→low-conf, queue from policy map
++ `DEFAULT_REVIEWER_QUEUE` fallback), `app/state.py` (LEGAL_TRANSITIONS + HUMAN_ONLY_TARGETS +
+`transition()` raising InvalidTransition / SelfApproveBlocked). PM independent QA: `make test`
+**179 pass / 1 skip** (re-run); CONF1/CONF2 (score model-independent + invariant to rationale),
+CONF3 banding, ROUTE1–3, STATUS1/STATUS2 (agent self-approve blocked, human allowed) all re-verified;
+**real demo-data routing characterized** (FACTS "demo routing"). **Verifier-independence:**
+test_stage1/2/3 UNTOUCHED; config.py additions-only. **`/code-review`: APPROVE** — 1 minor (confidence
+rationale recomputes coverage/dominance → deferred Stage 7); Stage-6 note (case_confident-i3 routes via
+security tag). Synced the 5 new constants into §9. Committed `stage-4-routing`.
+Status now: ✅ Stage 4 complete, committed. Suite 179/1-skip. **HALTED at the Stage 4 boundary per Asaf.**
+Next PM should: get Asaf's go-ahead, then brief **Stage 5** (audit log + export + hard boundary;
+`AUDIT1`–`AUDIT3`/`EXPORT1`–`EXPORT3`/`BOUND1`–`BOUND2`) — append-only JSONL (`RULE_AUDIT_COMPLETE`),
+Markdown+CSV export of APPROVED only (`RULE_NO_EXTERNAL_SEND` + `RULE_SENSITIVITY_GATE` + byte-exact
+`REVIEW_BANNER`); materialize `SENSITIVITY_HOLD`/`EXTERNAL_SEND_BLOCKED`. Reviewer gate fires.
+Watch out for / open: 5 new §9 constants flagged for Asaf; case_confident-i3 demo nuance (Stage 6);
+confidence-rationale dup (Stage 7 minor); ambiguity uses absolute BM25 gap (works here); `make test` needs venv.

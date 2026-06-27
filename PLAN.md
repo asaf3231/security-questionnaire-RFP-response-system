@@ -49,7 +49,7 @@ Status values: ⬜ Not started · 🔄 In progress · 🟡 Awaiting verification
 | 1 | Environment, secrets, config & synthetic inputs | `ENV1`–`ENV4`, `SEC1`–`SEC2`, `KB1`–`KB2`, `DATA1` | ✅ | ✅ Complete (2026-06-27; suite 39 green — see FACTS) |
 | 2 | KB chunks + deterministic retrieval (`rank_bm25`) | `RET1`–`RET3` | ✅ | ✅ Complete (2026-06-27; suite 71 green; Recall@5 — see FACTS) |
 | 3 | Context Stack + draft generation + grounding | `CTX1`–`CTX4`, `SCHEMA1`, `DRAFT1`–`DRAFT2`, `GROUND1` | ✅ | ✅ Complete (2026-06-27; suite 116/1-skip — see FACTS) |
-| 4 | Confidence + routing + state machine | `CONF1`–`CONF3`, `ROUTE1`–`ROUTE3`, `STATUS1`–`STATUS2` | ✅ | ⬜ Not started |
+| 4 | Confidence + routing + state machine | `CONF1`–`CONF3`, `ROUTE1`–`ROUTE3`, `STATUS1`–`STATUS2` | ✅ | ✅ Complete (2026-06-27; suite 179/1-skip — see FACTS) |
 | 5 | Audit log + export + hard boundary | `AUDIT1`–`AUDIT3`, `EXPORT1`–`EXPORT3`, `BOUND1`–`BOUND2` | ✅ | ⬜ Not started |
 | 6 | End-to-end pipeline + the two demo cases | `PIPE1`–`PIPE2`, `DEMO1`–`DEMO2`, `RULE1`–`RULE2` | ✅ | ⬜ Not started |
 | 7 | Offline evaluation harness | `EVAL1`–`EVAL3`, `RET2`, `LEAK4`–`LEAK5` | — | ⬜ Not started |
@@ -168,14 +168,19 @@ the three triggers, and advance items through the state machine with the no-self
 draft + retrieval signals; the `policy_tags` routing map.
 **Outputs:** `app/confidence.py`, `app/routing.py`, `app/state.py`, `tests/`.
 **Definition of Done (QA: `CONF1`–`CONF3`, `ROUTE1`–`ROUTE3`, `STATUS1`–`STATUS2`):**
-- [ ] `CONF1`/`CONF2` — score from property validators only; LLM rationale is non-authoritative.
-- [ ] `CONF3` — threshold banding from §9 (`CONFIDENCE_AUTO_THRESHOLD`/`CONFIDENCE_REVIEW_THRESHOLD`).
-- [ ] `ROUTE1`–`ROUTE3` — high-risk tag / ambiguity / low-confidence each route with the correct
-  reason-code to the mapped queue.
-- [ ] `STATUS1` — only legal `ITEM_STATES` edges; illegal transition raises.
-- [ ] `STATUS2` — agent self-approve blocked + `SELF_APPROVE_BLOCKED` audited (`RULE_NO_SELF_APPROVE`).
-**Reviewer gate:** ✅ (thresholds, routing table, state machine, two `RULE_*`).
-**Status:** ⬜ Not started.
+- [x] `CONF1`/`CONF2` — score from the 3 property validators only (pure `_compute_score`); PM-verified
+  `_claude_client` stays `None` + score invariant to rationale.
+- [x] `CONF3` — threshold banding from §9 (in-between → "review", conservative).
+- [x] `ROUTE1`–`ROUTE3` — high-risk / ambiguity / low-confidence each route with the correct
+  reason-code; queue from the policy map / `DEFAULT_REVIEWER_QUEUE`; benign item → not routed.
+- [x] `STATUS1` — only legal `ITEM_STATES` edges; illegal → `InvalidTransition`.
+- [x] `STATUS2` — agent self-approve raises `SelfApproveBlocked` (`SELF_APPROVE_BLOCKED`,
+  `RULE_NO_SELF_APPROVE`); `actor="human"` allowed. PM-verified.
+**Reviewer gate:** ✅ `/code-review` — **APPROVE**. Minor (deferred to Stage 7): coverage/dominance
+calc duplicated in the `confidence.py` rationale builder. **NEW §9 constants (Asaf-flagged):**
+`DEFAULT_REVIEWER_QUEUE`, `ROUTED_HIGH_RISK`/`ROUTED_AMBIGUOUS`/`ROUTED_LOW_CONFIDENCE`/
+`SELF_APPROVE_BLOCKED` — see `NOTES.md` D-S4. **Stage-6 note:** `case_confident-i3` routes (security tag).
+**Status:** ✅ Complete — PM-verified 2026-06-27; suite 179/1-skip; committed as `stage-4-routing`.
 
 ---
 

@@ -20,8 +20,9 @@ Maintained by: Asaf (PM)
 
 | Fact | Value | Source-of-truth command | Verified | Commit |
 |---|---|---|---|---|
-| offline suite | 116 pass / 1 skip / 0 fail (39 S1 + 32 S2 + 46 S3; skip = DRAFT2 live-gated) | `make test` (venv active) | 2026-06-27 | stage-3-draft |
-| import-safety (`ENV4`, Stage-3 scope) | clean; lazy `_claude_client` `None` (9 modules) | `python -c "import app.config, app.schema, app.kb, app.retrieval, app.eval.rubric, app.eval.fixtures, app.context_stack, app.llm, app.draft"` (empty cwd, no `.env`; progressive) | 2026-06-27 | stage-3-draft |
+| offline suite | 179 pass / 1 skip / 0 fail (39 S1 + 32 S2 + 46 S3 + 63 S4; skip = DRAFT2 live-gated) | `make test` (venv active) | 2026-06-27 | stage-4-routing |
+| import-safety (`ENV4`, Stage-4 scope) | clean; lazy `_claude_client` `None` (12 modules) | `python -c "import app.config, app.schema, app.kb, app.retrieval, app.eval.rubric, app.eval.fixtures, app.context_stack, app.llm, app.draft, app.confidence, app.routing, app.state"` (empty cwd, no `.env`; progressive) | 2026-06-27 | stage-4-routing |
+| demo routing (real data, `ROUTE*`) | case_confident i1/i2 → auto (score 0.84/0.86, not routed); case_review both → ROUTED_HIGH_RISK→legal; case_confident i3 → ROUTED_HIGH_RISK→security (security tag) | `python` over `route_for_review` on `data/questionnaires/*` | 2026-06-27 | stage-4-routing |
 | synthetic KB size | 20 chunks / 19 approved / 5 restricted-or-internal / 20 unique ids | `python -c "import app.kb as k;c=k.load_kb();print(len(c))"` | 2026-06-27 | stage-1-env |
 | pinned deps | 24 pins (pydantic 2.13.4 · rank-bm25 0.2.2 · anthropic 0.112.0 · python-dotenv 1.2.2 · pytest 9.1.1); venv py 3.12.4 | `grep -c '==' requirements.txt` | 2026-06-27 | stage-1-env |
 | Recall@K (`RET2`) | Recall@5 = 1.0000 (12/12 fixtures; ≥ `RECALL_AT_K_TARGET`); **computed** (perturb→0.0) | `python -c "from app.eval.fixtures import load_eval_fixtures as L; from app.eval.rubric import compute_recall_at_k as C; print(C(L()))"` | 2026-06-27 | stage-2-retrieval |

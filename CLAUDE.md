@@ -402,6 +402,7 @@ RANDOM_SEED                 = 42        # seeds MockLLM + any sampling; the offl
 
 # --- routing / queues / tags (Stages 1 & 4) ---
 REVIEWER_QUEUES             = ["security", "legal", "engineering", "gtm"]
+DEFAULT_REVIEWER_QUEUE      = "engineering"  # (added Stage 4, Asaf-flagged) fallback queue when no item topic_tag maps to the routing_map; must ∈ REVIEWER_QUEUES
 HIGH_RISK_TAGS              = ["legal", "security"]            # presence → mandatory routing
 SENSITIVITY_TAGS            = ["public", "internal", "restricted"]   # internal/restricted never auto-export
 
@@ -432,9 +433,13 @@ RULE_AUDIT_COMPLETE = "RULE_AUDIT_COMPLETE"
 RULE_SAFE_TERMINAL = "RULE_SAFE_TERMINAL"
 
 # --- audit reason-codes (§5.1) — materialized as named constants as each stage needs them ---
-GROUNDING_FAIL = "GROUNDING_FAIL"        # added Stage 3 (RULE_GROUNDED_ONLY chokepoint, app/draft.py)
-# (remaining §5.1 reason-codes — ROUTED_*, SELF_APPROVE_BLOCKED, SENSITIVITY_HOLD,
-#  EXTERNAL_SEND_BLOCKED, ERROR_TERMINAL — materialized at their stages 4–6)
+GROUNDING_FAIL = "GROUNDING_FAIL"          # added Stage 3 (RULE_GROUNDED_ONLY chokepoint, app/draft.py)
+ROUTED_HIGH_RISK = "ROUTED_HIGH_RISK"      # added Stage 4 (RULE_HITM_REVIEW_TRIGGER, app/routing.py)
+ROUTED_AMBIGUOUS = "ROUTED_AMBIGUOUS"      # added Stage 4 (RULE_HITM_REVIEW_TRIGGER, app/routing.py)
+ROUTED_LOW_CONFIDENCE = "ROUTED_LOW_CONFIDENCE"  # added Stage 4 (RULE_HITM_REVIEW_TRIGGER, app/routing.py)
+SELF_APPROVE_BLOCKED = "SELF_APPROVE_BLOCKED"    # added Stage 4 (RULE_NO_SELF_APPROVE, app/state.py)
+# (remaining §5.1 reason-codes — SENSITIVITY_HOLD, EXTERNAL_SEND_BLOCKED, ERROR_TERMINAL
+#  — materialized at their stages 5–6)
 ```
 
 - The LLM-provider interface (`LLMProvider`: `draft(context_stack) -> DraftAnswer`) is the **only** way
