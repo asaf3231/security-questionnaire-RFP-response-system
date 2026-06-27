@@ -7,6 +7,7 @@ No retrieval ranking logic — that is Stage 2 (app/retrieval.py).
 
 Enforces:
   KB1  — required fields present; sensitivity ∈ SENSITIVITY_TAGS; missing/bad field → ValueError
+         chunk_id uniqueness across approved_answers + docs → ValueError on duplicate
   DATA1 — questionnaire + policy_tags validate; routing map references only REVIEWER_QUEUES
   KB2  — no data/* value is hardcoded here (all values come from the files, not from this code)
   RULE_NO_REAL_PII — only synthetic *.synthetic.* files are tracked; checked by LEAK2/LEAK3
@@ -60,10 +61,18 @@ def load_kb() -> list[RetrievedChunk]:
         )
 
     chunks: list[RetrievedChunk] = []
+    seen_chunk_ids: set[str] = set()
+
     for i, record in enumerate(raw_records):
         _validate_kb_record(record, index=i, path=kb_path)
+        cid = record["chunk_id"]
+        if cid in seen_chunk_ids:
+            raise ValueError(
+                f"Duplicate chunk_id '{cid}' found in KB (first occurrence in {kb_path})"
+            )
+        seen_chunk_ids.add(cid)
         chunk = RetrievedChunk(
-            chunk_id=record["chunk_id"],
+            chunk_id=cid,
             question=record.get("question"),
             answer=record["answer"],
             source=record.get("source"),
@@ -84,8 +93,14 @@ def load_kb() -> list[RetrievedChunk]:
                 )
             for j, record in enumerate(doc_records):
                 _validate_kb_record(record, index=j, path=doc_file)
+                cid = record["chunk_id"]
+                if cid in seen_chunk_ids:
+                    raise ValueError(
+                        f"Duplicate chunk_id '{cid}' found in KB (collision detected in {doc_file})"
+                    )
+                seen_chunk_ids.add(cid)
                 chunk = RetrievedChunk(
-                    chunk_id=record["chunk_id"],
+                    chunk_id=cid,
                     question=record.get("question"),
                     answer=record["answer"],
                     source=record.get("source"),
@@ -112,7 +127,7 @@ def _validate_kb_record(record: Any, *, index: int, path: Path) -> None:
                 f"KB record at index {index} in {path} is missing required field "
                 f"'{required_field}'"
             )
-        if not record[required_field] and required_field != "approved":
+        if not record[required_field]:
             raise ValueError(
                 f"KB record at index {index} in {path} has empty required field "
                 f"'{required_field}'"

@@ -1,8 +1,8 @@
 # STATE.md — current checkpoint (OVERWRITE every session-end; never append)
-Updated: 2026-06-27 12:05 · Workstream: BACKEND · HEAD: (stage-1-env; verify w/ git)
-Current stage: 1 — Environment, secrets, config & synthetic inputs · Status: ✅ Complete (PM-verified)
-Resume at: **Stage 2 — KB chunks + deterministic retrieval (`rank_bm25` + tag filter), Recall@K** (HALTED here per Asaf's "stop at the Stage 1 boundary" instruction — awaiting Asaf's go-ahead to brief Stage 2). When resuming: also fold in the two deferred kb.py follow-ups (dead `!= "approved"` condition; chunk_id-uniqueness check) — see NOTES "Stage 2 follow-ups".
-Live-truth (re-verify, don't trust → FACTS.md is source of truth): offline suite 39 pass / 0 skip via `make test`; ENV4 import-safe (config/schema/kb, lazy singleton None); synthetic KB 20 chunks / 19 approved / 5 restricted-or-internal; 24 pinned deps; `DRAFT_MODEL=claude-sonnet-4-6`; export Markdown+CSV (OQ-2); codename Comet. Stage 0 baseline `stage-0-spine` (abb793a); Stage 1 = `stage-1-env`.
-Open halts / decisions pending Asaf: (1) **awaiting go-ahead for Stage 2** (stopped at the Stage 1 boundary as instructed); (2) FYI/visibility — SEC1 test was tightened during the Stage 1 fix; PM scrutinized + accepted as a strengthening (NOTES D-S1) — flag if you'd prefer it reverted.
-Last 3 superseded decisions (tombstones): none (OQ-1/OQ-2 resolved, not reversed).
-Disk-vs-ledger watch: app/ now has only config/schema/kb (+__init__) — 10 premature stub modules removed (reviewer-gate fix); Stage 2+ modules will be created when their stage lands (progressive ENV4).
+Updated: 2026-06-27 13:55 · Workstream: BACKEND · HEAD: (stage-2-retrieval; verify w/ git)
+Current stage: 2 — KB chunks + deterministic retrieval (`rank_bm25`) · Status: ✅ Complete (PM-verified)
+Resume at: **Stage 3 — Context Stack (4-layer backpack) + draft generation + grounding** (`CTX1`–`CTX4`, `SCHEMA1`, `DRAFT1`–`DRAFT2`, `GROUND1`). HALTED here per Asaf's "halt at the Stage 2 boundary for manual review." When resuming: implement `app/context_stack.py` + `app/llm.py` (MockLLM + lazy gated ClaudeLLM) + `app/draft.py` (grounding_check → `UNGROUNDED_PLACEHOLDER` byte-exact, `RULE_GROUNDED_ONLY`). Graded contracts → reviewer gate fires.
+Live-truth (re-verify, don't trust → FACTS.md is source of truth): offline suite 71 pass (39 S1 + 32 S2) via `make test` (venv active); Recall@5 = 1.0000 (12 fixtures, ≥ target 0.90, computed); retrieval deterministic; KB 20/19/5, 20 unique ids; `DRAFT_MODEL=claude-sonnet-4-6`. Tags: stage-0-spine → stage-1-env → stage-2-retrieval on `main`.
+Open halts / decisions pending Asaf: HALTED at Stage 2 boundary for manual review (per instruction). No open decisions. (FYI carried: Stage 1 SEC1 strengthening accepted — NOTES D-S1.)
+Last 3 superseded decisions (tombstones): none.
+Disk-vs-ledger watch: Stage 6 efficiency follow-up logged (retrieve() rebuilds BM25 per call — build once in the pipeline). `make test` needs the `.venv` active (system py 3.10 lacks rank_bm25).

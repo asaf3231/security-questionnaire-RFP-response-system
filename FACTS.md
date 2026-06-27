@@ -20,11 +20,11 @@ Maintained by: Asaf (PM)
 
 | Fact | Value | Source-of-truth command | Verified | Commit |
 |---|---|---|---|---|
-| offline suite | 39 pass / 0 skip / 0 fail | `make test` | 2026-06-27 | stage-1-env |
-| import-safety (`ENV4`, Stage-1 scope) | clean; lazy `_claude_client` `None` | `python -c "import app.config, app.schema, app.kb"` (empty cwd, no `.env`; full 13-module set re-proven as modules land) | 2026-06-27 | stage-1-env |
-| synthetic KB size | 20 chunks / 19 approved / 5 restricted-or-internal | `python -c "import app.kb as k;c=k.load_kb();print(len(c))"` | 2026-06-27 | stage-1-env |
+| offline suite | 71 pass / 0 skip / 0 fail (39 S1 + 32 S2) | `make test` (venv active) | 2026-06-27 | stage-2-retrieval |
+| import-safety (`ENV4`, Stage-2 scope) | clean; lazy `_claude_client` `None` | `python -c "import app.config, app.schema, app.kb, app.retrieval, app.eval.rubric, app.eval.fixtures"` (empty cwd, no `.env`; progressive — full set re-proven as modules land) | 2026-06-27 | stage-2-retrieval |
+| synthetic KB size | 20 chunks / 19 approved / 5 restricted-or-internal / 20 unique ids | `python -c "import app.kb as k;c=k.load_kb();print(len(c))"` | 2026-06-27 | stage-1-env |
 | pinned deps | 24 pins (pydantic 2.13.4 · rank-bm25 0.2.2 · anthropic 0.112.0 · python-dotenv 1.2.2 · pytest 9.1.1); venv py 3.12.4 | `grep -c '==' requirements.txt` | 2026-06-27 | stage-1-env |
-| Recall@K (`RET2`) | _pending Stage 2_ | `make eval` | — | — |
+| Recall@K (`RET2`) | Recall@5 = 1.0000 (12/12 fixtures; ≥ `RECALL_AT_K_TARGET`); **computed** (perturb→0.0) | `python -c "from app.eval.fixtures import load_eval_fixtures as L; from app.eval.rubric import compute_recall_at_k as C; print(C(L()))"` | 2026-06-27 | stage-2-retrieval |
 | grounding rate (`EVAL1`) | _pending Stage 7_ | `make eval` | — | — |
 | routing accuracy (`EVAL1`) | _pending Stage 7_ | `make eval` | — | — |
 | confidence calibration (`EVAL3`) | _pending Stage 7_ | `make eval` | — | — |

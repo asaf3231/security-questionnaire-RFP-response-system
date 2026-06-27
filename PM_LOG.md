@@ -77,3 +77,37 @@ filter + Recall@K), folding in the two deferred kb.py follow-ups. Stage 2 touche
 Watch out for / open: SEC1 test edit accepted as a strengthening (flag to Asaf for visibility — revert
 if undesired); system python is 3.10 (too old) — venv uses 3.12.4, so `make test` needs the venv
 active; Recall@K fixtures (`fixtures/eval/`) get seeded at Stage 2 for `RET2`.
+
+## 2026-06-27 13:33 — [BACKEND] SESSION START
+Picking up: **Stage 1 ✅ verified & locked by Asaf**; authorized to execute **Stage 2** (KB chunks +
+deterministic `rank_bm25` retrieval) under the autonomous loop, then HALT at the Stage 2 boundary for
+Asaf's manual review.
+State as read (to re-verify): suite 39 green (Stage 1, `stage-1-env`); KB 20/19; §9 retrieval constants
+present. Asaf's explicit Stage 2 requirements: (1) clear the two deferred kb.py findings first
+(dead condition + chunk_id uniqueness); (2) `retrieve(question)` via pinned `rank_bm25`, atomic unit =
+full paragraph/approved-answer chunk; (3) strict topic+sensitivity filtering, only `approved==True`
+accessible; (4) seed `fixtures/eval/` + compute Recall@K via `rubric.py`, **metrics written to
+FACTS.md** (PM records after verifying); (5) full determinism (identical ranked lists). Then
+`/code-review` on the graded retrieval contracts.
+Plan for this session: write `briefs/stage-2.md`; spawn cold `general-purpose` executer (Sonnet);
+PM re-runs `RET1`–`RET3` + determinism + computed-Recall@K independently; `/code-review` gate; record
+Recall@K in FACTS; mark Stage 2; commit `stage-2-retrieval`; HALT + handback. Do not advance to Stage 3.
+
+## 2026-06-27 13:55 — [BACKEND] SESSION END / HANDOFF
+Did: **Stage 2 executed via the autonomous loop and PM-verified ✅.** Cold executer built
+`app/retrieval.py` (`rank_bm25` BM25Okapi, exact graded `retrieve()` signature, deterministic
+tokenizer + `(-score, chunk_id)` sort, approved-only + topic + sensitivity filters), recreated
+`app/eval/` (`rubric.compute_recall_at_k`, `fixtures`), seeded `fixtures/eval/` (12 labeled gold),
+and cleared both deferred `kb.py` findings (dead condition + chunk_id-uniqueness `ValueError`). PM
+independent QA: `make test` **71 green** (re-run), **Recall@5 = 1.0000** re-computed (perturb→0.0
+proves `RULE_NO_FABRICATED_METRIC`), determinism re-checked (run1==run2; no non-approved returned).
+**Verifier-independence:** `tests/test_stage1.py` UNTOUCHED (executer added a new ENV4-progressive test
+in `test_stage2.py` instead of editing the existing one) — clean. **`/code-review` gate: APPROVE**, no
+correctness findings; 1 minor efficiency note (BM25 rebuilt per `retrieve()` call) → deferred to Stage
+6. Verified numbers in FACTS (suite/Recall@K/import-safety scope). Committed `stage-2-retrieval`.
+Status now: ✅ Stage 2 complete, committed. Suite 71 green. **HALTED at the Stage 2 boundary per Asaf.**
+Next PM should: get Asaf's go-ahead, then brief **Stage 3** (Context Stack + draft + grounding;
+`CTX1`–`CTX4`/`SCHEMA1`/`DRAFT1`–`DRAFT2`/`GROUND1`) — graded contracts (LLMProvider interface, schema,
+byte-exact `UNGROUNDED_PLACEHOLDER`, `RULE_GROUNDED_ONLY`) → reviewer gate fires. DRAFT2 is live-gated.
+Watch out for / open: Stage 6 efficiency follow-up (build BM25 index once); Recall=1.0 is honest but
+reflects a small/easy synthetic corpus — good Q&A talking point, not a defect; `make test` needs venv.

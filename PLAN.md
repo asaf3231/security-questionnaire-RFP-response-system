@@ -47,7 +47,7 @@ Status values: ⬜ Not started · 🔄 In progress · 🟡 Awaiting verification
 |---:|---|---|:---:|---|
 | 0 | Project setup & spine | meta (this file set) | — | ✅ Complete (Asaf green-lit 2026-06-27) |
 | 1 | Environment, secrets, config & synthetic inputs | `ENV1`–`ENV4`, `SEC1`–`SEC2`, `KB1`–`KB2`, `DATA1` | ✅ | ✅ Complete (2026-06-27; suite 39 green — see FACTS) |
-| 2 | KB chunks + deterministic retrieval (`rank_bm25`) | `RET1`–`RET3` | ✅ | ⬜ Not started |
+| 2 | KB chunks + deterministic retrieval (`rank_bm25`) | `RET1`–`RET3` | ✅ | ✅ Complete (2026-06-27; suite 71 green; Recall@5 — see FACTS) |
 | 3 | Context Stack + draft generation + grounding | `CTX1`–`CTX4`, `SCHEMA1`, `DRAFT1`–`DRAFT2`, `GROUND1` | ✅ | ⬜ Not started |
 | 4 | Confidence + routing + state machine | `CONF1`–`CONF3`, `ROUTE1`–`ROUTE3`, `STATUS1`–`STATUS2` | ✅ | ⬜ Not started |
 | 5 | Audit log + export + hard boundary | `AUDIT1`–`AUDIT3`, `EXPORT1`–`EXPORT3`, `BOUND1`–`BOUND2` | ✅ | ⬜ Not started |
@@ -126,13 +126,15 @@ lexical retrieval via `rank_bm25` + a topic/sensitivity tag filter, tuned **Reca
 **Inputs:** `CLAUDE.md` §3.1/§9 (`RETRIEVAL_TOP_K`, `BM25_K1`, `BM25_B`, `RECALL_AT_K_TARGET`); `app/kb.py`.
 **Outputs:** `app/kb.py`, `app/retrieval.py`, `tests/`, labeled `fixtures/eval/` seed for Recall@K.
 **Definition of Done (QA: `RET1`–`RET3`):**
-- [ ] `RET1` — `retrieve(question)` returns ≤ `RETRIEVAL_TOP_K` chunks via `rank_bm25`; only
-  `approved==True`; topic/sensitivity tag filter applied; no network.
-- [ ] `RET2` — **Recall@K** computed over `gold_fixtures` (by `rubric.py`), recorded in `FACTS.md`,
-  meets `RECALL_AT_K_TARGET`.
-- [ ] `RET3` — determinism: identical ranked `chunk_id` list across runs.
-**Reviewer gate:** ✅ (retrieval signature + BM25 params).
-**Status:** ⬜ Not started.
+- [x] `RET1` — `retrieve(question)` returns ≤ `RETRIEVAL_TOP_K` approved chunks via `rank_bm25`
+  (BM25Okapi, config params); non-approved never returned; topic + `allowed_sensitivities` filters; no network.
+- [x] `RET2` — **Recall@K** computed over `fixtures/eval/` by `rubric.py`, recorded in `FACTS.md`,
+  meets `RECALL_AT_K_TARGET` (PM re-computed; perturb→0.0 proves computed, `RULE_NO_FABRICATED_METRIC`).
+- [x] `RET3` — determinism: identical ranked `chunk_id` list across sequential runs (chunk_id tiebreak).
+- [x] Deferred Stage-1 `kb.py` fixes cleared: dead `!= "approved"` condition removed; chunk_id-uniqueness `ValueError` added.
+**Reviewer gate:** ✅ `/code-review` run — **APPROVE**, no correctness findings; 1 minor efficiency note
+(`retrieve()` rebuilds the BM25 index per call) → deferred to Stage 6 pipeline (build index once). See NOTES.
+**Status:** ✅ Complete — PM-verified 2026-06-27; suite 71 green; committed as `stage-2-retrieval`.
 
 ---
 

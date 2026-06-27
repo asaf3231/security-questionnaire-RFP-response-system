@@ -1,0 +1,62 @@
+[
+  {
+    "query": "Does your platform encrypt data at rest and what method is used?",
+    "relevant_chunk_ids": ["kb-001"],
+    "topic_tags": ["encryption"]
+  },
+  {
+    "query": "What TLS version do you use to protect data in transit?",
+    "relevant_chunk_ids": ["kb-002"],
+    "topic_tags": ["encryption"]
+  },
+  {
+    "query": "Do you perform penetration testing and how often?",
+    "relevant_chunk_ids": ["kb-003"],
+    "topic_tags": ["security"]
+  },
+  {
+    "query": "What is your data retention and deletion policy?",
+    "relevant_chunk_ids": ["kb-004"],
+    "topic_tags": ["data-handling"]
+  },
+  {
+    "query": "Do you have SOC 2 Type II certification?",
+    "relevant_chunk_ids": ["kb-005"],
+    "topic_tags": ["compliance"]
+  },
+  {
+    "query": "Does your platform support SSO and which identity providers are supported?",
+    "relevant_chunk_ids": ["kb-006"],
+    "topic_tags": ["identity"]
+  },
+  {
+    "query": "Do you have an incident response plan and how quickly do you notify customers of breaches?",
+    "relevant_chunk_ids": ["kb-007"],
+    "topic_tags": ["security"]
+  },
+  {
+    "query": "How do you manage employee access control and enforce least privilege?",
+    "relevant_chunk_ids": ["kb-008"],
+    "topic_tags": ["access-control"]
+  },
+  {
+    "query": "Does your platform support multi-factor authentication for users?",
+    "relevant_chunk_ids": ["kb-013"],
+    "topic_tags": ["security"]
+  },
+  {
+    "query": "What is your uptime SLA and do you publish a status page?",
+    "relevant_chunk_ids": ["kb-012"],
+    "topic_tags": ["infrastructure"]
+  },
+  {
+    "query": "Do you carry cyber liability insurance coverage?",
+    "relevant_chunk_ids": ["kb-011"],
+    "topic_tags": ["legal"]
+  },
+  {
+    "query": "How do you handle data subject access requests under GDPR or CCPA?",
+    "relevant_chunk_ids": ["kb-015"],
+    "topic_tags": ["privacy"]
+  }
+]

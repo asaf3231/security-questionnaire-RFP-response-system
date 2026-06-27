@@ -92,6 +92,23 @@ Seven concrete, grep/test-enforced failures, each a `RULE_*`: (1) grounding/hall
 
 ---
 
+## Structural insights (carried forward for later stages)
+- **Modules are created per-stage (progressive ENV4).** `app/` holds only the modules whose stage has
+  landed (Stage 1: config/schema/kb); no premature stubs (CLAUDE §8). `ENV4` imports the existing set
+  and is re-proven as each stage adds its module.
+- **KB is one flat chunk list.** `load_kb()` merges `approved_answers.synthetic.json` + every
+  `docs/*.synthetic.json` paragraph into a single `list[RetrievedChunk]`; callers filter
+  `.approved == True` for retrieval. The atomic retrieval unit is the full chunk (Asaf principle B).
+- **`RetrievedChunk.bm25_score` defaults `0.0` and is *set by retrieval* (Stage 2)** — schema is
+  populated ahead in one used module (`schema.py`), which is fine (not a stub module).
+- **Recall@K ≠ eval contamination.** For `RET2`, the labeled-relevant `chunk_id` legitimately lives in
+  the KB — that is exactly what retrieval must find. The contamination guard (`RULE_NO_EVAL_CONTAMINATION`,
+  Stage 7) concerns the *answer-generation* eval holding the questionnaire-under-test out of the KB —
+  a different thing. Do not "hold out" the relevant chunk from a Recall@K corpus.
+- **Confidence/routing signals come from retrieval.** Stage 4's deterministic gate reads the BM25
+  top-score + the top1−top2 gap (`AMBIGUITY_SCORE_MARGIN`), so Stage 2's `retrieve()` must return
+  per-chunk scores in a stable, comparable form.
+
 ## Stage decisions
 
 ### D-S1 — Stage 1 SEC1 test modification scrutinized & accepted (2026-06-27)
@@ -106,11 +123,17 @@ tracked file. The change still catches any real key + the `ANTHROPIC_API_KEY=` a
 was masked and detection improved. **How to apply:** any future graded-check edit gets the same
 treatment — re-run at pre-edit + an independent verification before accept; halt to Asaf on any doubt.
 
-### Stage 2 follow-ups (deferred from Stage 1 review — do at Stage 2 when `kb.py` is next touched)
-- Remove the dead `and required_field != "approved"` sub-condition in `_validate_kb_record`.
-- Add a `chunk_id`-uniqueness `ValueError` across `approved_answers` + `docs` in `load_kb`
-  (latent: duplicate ids would break Stage 2 citations/dedup).
+### Stage 2 follow-ups (from Stage 1 review) — ✅ DONE in Stage 2
+- ~~Remove the dead `and required_field != "approved"` sub-condition~~ ✅ removed.
+- ~~Add a `chunk_id`-uniqueness `ValueError` in `load_kb`~~ ✅ added (across answers + docs).
+
+### Stage 6 follow-up (from Stage 2 reviewer gate — efficiency, non-blocking)
+- `retrieve()` calls `load_kb()` and rebuilds the `BM25Okapi` index on **every** call. Fine for the
+  20-chunk demo, but the Stage-6 pipeline answers many items per questionnaire → build the index /
+  load the KB **once** and reuse (or `functools.lru_cache` on `load_kb`, mindful of test isolation).
+  Not a correctness issue; no change made at Stage 2.
 
 ## Handback pointers (filled per stage; pointer-not-copy)
 Stage 0 ✅ — spine genesis (PM-authored) · commit abb793a · tag stage-0-spine
 Stage 1 ✅ — handbacks/stage-1.md · verdict APPROVE (1 finding fixed, SEC1 edit accepted) · tag stage-1-env
+Stage 2 ✅ — handbacks/stage-2.md · verdict APPROVE (no findings; Recall@5=1.0 computed) · tag stage-2-retrieval
