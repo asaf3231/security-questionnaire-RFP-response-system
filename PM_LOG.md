@@ -106,7 +106,21 @@ fix the Makefile venv dependency; track redacted samples). Process lesson now pe
 PM re-runs the REAL negative case + perturbs metrics; never trusts harness-reported numbers.
 Watch out for / open: 7r graded changes flagged (grounding question-relevance + floor value); eval path
 app/eval/harness.py vs Asaf's app/eval_harness.py; Makefile-needs-venv (Stage-8).
-**LOGOUT 2026-06-27 19:15 (Asaf) — session formally closed for PM handoff.** Resume primitive = STATE.md
+## 2026-06-27 19:40 — [BACKEND] SESSION START (logout retracted; Stage 8)
+Picking up: Asaf retracted the logout ("never mind") and **locked Stage 7**, authorizing **Stage 8
+(Packaging Hardening & Production Readiness)**. **Reconciled Asaf's in-flight governance hardening**
+(now committed `100c0f3`): `RULE_GRADED_ARTIFACT_LOCK` + `RULE_METRIC_FALSIFIABLE` (CLAUDE §5 + QA
+§15 META-*), the `integrity` Make pre-flight + `scripts/check_graded_artifacts.sh`, methodology Metric-
+Integrity section. Verified: integrity gate passes; suite 315/1; eval via `app/eval/harness.py`
+(eval-path question RESOLVED); the gate correctly aborts on a modified test (probe reverted). These
+rules are now BINDING: **tests/+fixtures/ are add-only; never set the human-only `ALLOW_GRADED_EDIT`.**
+Plan: write `briefs/stage-8.md` (venv-clean Makefile keeping Asaf's integrity pre-flight; anti-leakage
+hardening; strict package boundary + redacted samples; add-only); spawn cold executer; PM re-runs suite
++ `make eval` + LEAK/PKG/META + venv-clean Makefile + verifier-independence; run mandatory
+**`/security-review`** governance gate; record FACTS; mark Stage 8; commit; **HALT at the final project
+boundary for Asaf's sign-off / production release.** Stage 9 (Brief/Appendix) still pending after.
+
+**LOGOUT 2026-06-27 19:15 (Asaf) — session formally closed for PM handoff** [SUPERSEDED — logout retracted 19:40]. Resume primitive = STATE.md
 (Stage 7 ✅ honest / 7r; HEAD 7921805 `stage-7-eval`; suite 315/1 re-confirmed; next = Stage 8). Caveat:
 Asaf has IN-FLIGHT uncommitted edits to spine docs (`PM_Methodology_Prompt.md`, `CLAUDE.md`,
 `QA_checklist.md`) — these are Asaf's, NOT my stage work; the next PM must reconcile/confirm them (per
@@ -147,3 +161,110 @@ Next PM should: get Asaf's go-ahead, then brief **Stage 8** (anti-leakage & pack
 (robust `make demo`/`test`/`eval`) + tracking one redacted sample export/audit. Reviewer gate + security gate fire.
 Watch out for / open: eval path app/eval/harness.py (vs Asaf's app/eval_harness.py — flag); Makefile-needs-venv
 (Stage-8); SEC1-miss process lesson; Option A live. No open code follow-ups (confidence dup cleared).
+
+## 2026-06-27 19:45 — [GOVERNANCE] SESSION START + END / HANDOFF (anti-gaming hardening; Asaf-directed + SIGNED-OFF)
+Context: this session ran as the **VERIFIER** on the concurrent BACKEND Stage-7 work; found (and Asaf
+confirmed) the eval was **gold-fitted** (eval-006 flipped to match buggy output) + **tautological**
+(`_simulate_grounding`). Asaf approved a portable governance-hardening plan + directed me to implement it.
+Did: authored the anti-gaming layer — committed by Asaf as **`100c0f3`**: `PM_Methodology_Prompt.md`
+Metric Integrity & Anti-Gaming (#4 Falsifiability / #5 Spec-First Gold / #6 Real-Path / #7 Behavior-Coverage
++ Green≠Verified), graded-artifact-set Verifier-Independence (add-only / two-key) + 3 named Red Flags;
+`CLAUDE.md` §5.3 `RULE_GRADED_ARTIFACT_LOCK` + `RULE_METRIC_FALSIFIABLE` (governance-tier, deliberately
+NOT `config.py` so RULE1 + the 11-rule test stay green — verified BEFORE editing); `QA_checklist.md` §15
+`META-LOCK/FALSIFY/REALPATH/PROVENANCE`; `scripts/check_graded_artifacts.sh` + Makefile `integrity`
+pre-flight gating test/eval. **Gate verified live by me:** modify an existing test → abort exit 1; human
+override `ALLOW_GRADED_EDIT=1` → pass; add a new test → pass; `make test` → gate OK → 315/1; honest
+`make eval` → raw_grounded 0.833 + calibration review{ungrounded=1} (eval-006 now GENUINELY caught — I re-ran it).
+Housekeeping: NOTES **D-GOV1** recorded (canonicalized the GOV-HARDENING entry + the *why* + the 7r human-nod).
+STATE already refreshed by BACKEND (HEAD 100c0f3 / Stage 7 ✅ / Stage 8) — left intact, not clobbered.
+**Asaf FINAL SIGN-OFF received:** governance LOCKED; 7r graded-contract changes (`grounding_check(question=...)`
++ `GROUNDING_QUESTION_COVERAGE_MIN=0.30`) explicitly authorized (the human nod the new framework requires).
+Status now: ✅ Governance framework locked + signed-off. Stages 0–7 ✅. Suite 315/1; honest eval.
+Handing back to the **primary developer agent** for **Stage 8** per `briefs/stage-8.md` (prepared, governance-aware).
+**Concurrency note (honest):** Stage 8 is ALREADY in-flight under the BACKEND workstream (briefs/stage-8.md,
+pyproject.toml, samples/, venv-clean Makefile, .gitignore present) — I did **NOT** spawn a second/duplicate
+executer (would collide). The active developer continues; STATE resume = spawn/await the cold executer on briefs/stage-8.md.
+Developer agent instructions (Stage 8): respect `RULE_GRADED_ARTIFACT_LOCK` (tests/+fixtures/ **ADD-ONLY**;
+NEVER set `ALLOW_GRADED_EDIT` — human-only) + `RULE_METRIC_FALSIFIABLE` (no `_simulate_*`; keep a red negative
+case); `git status` first + build on the in-flight Stage-8 scaffolding (don't clobber); complete `LEAK1`–`LEAK-S`
+/ `PKG1`–`PKG3` / `SEC1`–`SEC2`; then PM re-runs suite + `make eval` + `META-*` + the mandatory **`/security-review`**
+gate; HALT at the final boundary for Asaf.
+
+## 2026-06-27 20:05 — [BACKEND] SESSION END / HANDOFF (Stage 8 complete — AT FINAL BOUNDARY)
+Did: **Stage 8 (Packaging Hardening & Production Readiness) executed + PM-verified ✅.** First reconciled
+Asaf's governance hardening (committed 100c0f3). Cold executer (add-only) delivered: venv-clean Makefile
+(`.venv/bin/*` + bootstrap guard; Asaf's `integrity` pre-flight KEPT), `pyproject.toml` package boundary,
+hardened `.gitignore`, README run-from-clean section, redacted `samples/` (md+csv+jsonl),
+`fixtures/eval/PROVENANCE.md` (ADD, META-PROVENANCE), `tests/test_stage8.py` (+58). PM independent QA:
+**`make test` 373 pass / 1 skip via the venv-clean Makefile with NO manual activation**; `make eval`
+green; **ADD-ONLY honored** (`git diff HEAD -- tests/ fixtures/` empty; META-LOCK; ALLOW_GRADED_EDIT
+never set); samples redacted; pyproject excludes dev dirs. **Governance gate:** native `/security-review`
+CLI aborts (no git `origin` remote) → ran the equivalent comprehensive scan → **CLEAN** (7 LEAK*; no
+real secret/PII; `.env` ignored; no network-send primitive outside the gated `app/llm.py`). Committed
+deliverables as `50b90c8` / tag `stage-8-packaging` (NOTES/PM_LOG left uncommitted to not clobber Asaf's
+in-flight edits — this pointer + SESSION END appended surgically).
+Status now: ✅ Stage 8 complete. Suite 373/1. **HALTED AT THE FINAL PROJECT BOUNDARY per Asaf — awaiting
+final sign-off / production release.**
+Next PM should: (1) await Asaf's final sign-off / release; (2) if more work: **Stage 9** (Brief/Deck +
+Technical Appendix, `DOC1`–`DOC2`) is the only remaining planned stage; (3) optionally push to a remote
+so the native `/security-review` CLI can run. Asaf has uncommitted in-flight edits in NOTES.md/PM_LOG.md
+(incl. these appends) to land.
+Watch out for / open: native /security-review needs `origin` (manual scan run, CLEAN); Stage-9 docs
+pending; every number in the Brief/Appendix must trace to FACTS.md.
+
+## 2026-06-27 21:00 — [BACKEND] SESSION START (fresh PM; reconcile at final boundary)
+Picking up: Stages 0–8 ✅ complete (PLAN ledger). Project AT FINAL BOUNDARY; only Stage 9 (Brief +
+Technical Appendix, DOC1–DOC2) remains, halted for Asaf's go.
+State as read (re-verified, not trusted): HEAD `50b90c8` (Stage 8) on `main`; `make test` re-run live →
+**373 pass / 1 skip** (matches FACTS/STATE); reconciled the uncommitted NOTES.md/PM_LOG.md appends
+(D-GOV1, D-S8, Stage-8 pointer + prior SESSION END) as the outgoing PM's legitimate handoff edits —
+NOT clobbered. Untracked `HANDOFF.md` = curated fresh-PM handoff (consistent). No discrepancies vs STATE.
+Plan for this session: re-orient as PM, surface the two open decisions to Asaf (final sign-off / release;
+proceed to Stage 9 + whether to push a remote for native /security-review), then await instructions.
+
+## 2026-06-27 21:30 — [BACKEND] SESSION START (Stage 10 — KB & Coverage Expansion; Asaf-directed)
+Picking up: reconciled the drift the prior STATE missed — branch is `redteam/crazy-testing`, **HEAD
+`9297cc4`** (ADD-only red-team layer beyond `stage-8-packaging`), not `main`/`50b90c8`. Live `make test`
+re-verified → **538 pass / 1 skip / 2 xfailed** (integrity gate OK); the 2 xfails = red-team FINDING-1/2
+(lexical-grounding limits, DECISION-NEEDED). Untracked: `scripts/run_live_suite.py`,
+`redteam/LIVE_RUN_FINDINGS.md`, `crazy_test_prompt.md`, `HANDOFF.md`. FACTS suite row still says 373/1
+(stale — pre-red-team); will refresh.
+Asaf mission (NEW, beyond planned Stage 9): **build the KB — more inputs, cases, and "solutions"** with
+the steer **"safety first / credibility."** Approved plan = new **Stage 10 (KB & Coverage Expansion),
+ADD-only**: grow KB ~2× across ~6 NEW topic clusters (new tags, disjoint vocab), extend routing map,
+extend Recall@K via a NEW fixture file, add labeled behavior cases + an additive
+`tests/test_stage10_expansion.py` driven through the REAL pipeline, spec-first gold incl. red/negative.
+State as read (to re-verify): suite 538/1/2xfail; KB 20 chunks/19 approved (16 approved_answers + 4
+docs); LOCKED_PATHS=(tests fixtures) → all new tests/fixtures are NEW FILES; data/ editable but bounded
+by keeping every locked case green.
+Plan for this session: capture make eval baseline; Batch 1 (KB) → re-run full suite + eval; Batch 2
+(routing map); Batch 3 (recall gold, new file); Batch 4 (behavior cases + additive test); verify after
+each; `/code-review` + synthetic-PII scan; update FACTS/PLAN/STATE/NOTES; commit at the Stage-10
+boundary; HALT for Asaf. Any locked-test regression = STOP/FINDING (fix the new data, never the test).
+
+## 2026-06-27 22:10 — [BACKEND] SESSION END / HANDOFF (Stage 10 — Intelligent Query Refinement IMPLEMENTED, awaiting Asaf sign-off)
+Did: **Implemented Asaf's architectural directive — the QUERY_REFINEMENT stage + draft-prompt fix**, PM
+acting as executer (Asaf directed + approved the plan in-session; plan at ~/.claude/plans/nested-riding-flask.md).
+Shipped (ADD-only for the locked set): NEW `app/query_optimizer.py` (`strip_thinking_block` reason-then-strip
+util + `refine_query` wrapper w/ safe fallback); additive edits to `app/llm.py` (`LLMProvider.refine_query`
+identity default → MockLLM inherits identity ⇒ offline byte-identical; `ClaudeLLM.refine_query` override;
+`ClaudeLLM.draft` strips `<thinking>` BEFORE citations/gate/export; `_build_prompt` QUESTION block +
+`<thinking>` directive constants), `app/schema.py` (`ContextStack.question=""`), `app/context_stack.py`,
+`app/pipeline.py` (refine + audit before retrieve), `scripts/run_live_draft.py` (raw→optimized display +
+no-leak check + a pre-existing None-confidence crash guard); NEW `tests/test_stage10_query_refinement.py` (27).
+PM verification: full suite **565 pass / 1 skip / 2 xfail** (branch baseline 538 + 27 add-only, **pre==post ⇒
+0 regressions**); `make eval` metrics UNCHANGED; `make demo` clean; **defect fixed** (`item.question in
+ClaudeLLM._build_prompt` = True); add-only honored (`git diff HEAD -- tests/ fixtures/` empty; integrity gate
+green; ALLOW_GRADED_EDIT never set). **Reviewer gate:** one INDEPENDENT `/code-review` agent → all hard
+constraints preserved (import-safety/no-cycle, determinism, strip-ordering, safe-degrade, contracts intact)
++ 2 CONFIRMED findings — (1) `strip_thinking_block` over-stripped on a malformed close tag `</thinking foo>`
+(FIXED: tolerant close regex + 2 tests); (2) pre-existing None-confidence crash in run_live_draft (FIXED).
+Status now: 🟡 Stage 10 implemented + PM-verified; **HALTED awaiting Asaf sign-off + commit decision.**
+Next PM should: get Asaf's (a) sign-off on the graded-contract additions (LLMProvider iface, ContextStack
+schema, pipeline chokepoint, prompt template); (b) nod on the ledger deviation (grep-checks in NEW Stage-10
+DoD/QA §16, NOT retro-edited into ✅ Stage 3/4); (c) decision on the **Stage-10 NAMING COLLISION** — a
+separate "Stage 10 — data/KB expansion" SESSION START (tests/test_stage10_expansion.py) sits above in this
+log; reconcile (rename one to Stage 11). Then commit on `redteam/crazy-testing` (or a feature branch) +
+record the FACTS row commit sha. Optional: measure live retrieval/grounding delta via scripts/run_live_suite.py.
+Watch out for / open: graded-contract change ⇒ needs Asaf's explicit nod before commit; the in-`<thinking>`
+sensitivity self-check is defense-in-depth ONLY (code chokepoints remain enforcement, CLAUDE.md §5).

@@ -60,12 +60,18 @@ class ContextStack(BaseModel):
       retrieval   — ONLY the top-K retrieved chunk texts (no other KB content)
       constraint  — active hard boundaries (e.g. sensitivity / governance rules)
       state       — position in the questionnaire + item's current state
+
+    question — the ORIGINAL questionnaire item question (Stage 10, additive). Carried
+    here so the draft prompt builder can render it for the model (without it the live
+    model must reverse-engineer the question from the retrieved chunks). Optional with a
+    default so every pre-Stage-10 ContextStack(...) construction stays valid.
     """
 
     instruction: str
     retrieval: list[str]  # only retrieved chunk texts; nothing else reaches the model
     constraint: str
     state: str
+    question: str = ""  # original item question (Stage 10, additive; default = backward-compatible)
 
 
 # ---------------------------------------------------------------------------

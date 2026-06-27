@@ -127,4 +127,5 @@ def assemble_context(
         retrieval=retrieval,
         constraint=constraint,
         state=state,
+        question=item.question,  # Stage 10: carry the original question for the draft prompt
     )

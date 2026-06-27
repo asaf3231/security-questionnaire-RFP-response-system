@@ -13,6 +13,7 @@ Import-safe: no side effects at import. load_env() + API key check inside main()
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -91,14 +92,35 @@ def main() -> None:
     if result.errors:
         print(f"Errors         : {len(result.errors)}")
 
+    # Stage 10: surface QUERY_REFINEMENT (raw → optimized) from the audit trail for the demo.
+    # Read from the audit log rather than re-calling the model (no redundant API call).
+    refine_by_item: dict[str, dict] = {}
+    try:
+        with open(audit_log_path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                ev = json.loads(line)
+                detail = ev.get("detail") or {}
+                if detail.get("tool") == "refine_query":
+                    refine_by_item[ev.get("item_id")] = detail
+    except (OSError, ValueError):
+        refine_by_item = {}
+
     # Per-item summary
     for doc_item in result.response_doc.items:
         iid = doc_item.item_id
         routing = result.routing.get(iid)
         band = confidence_band(doc_item.confidence_score) if doc_item.confidence_score is not None else "n/a"
+        conf_str = f"{doc_item.confidence_score:.3f}" if doc_item.confidence_score is not None else "n/a"
         print()
-        print(f"  {iid}  [{doc_item.status}]  confidence={doc_item.confidence_score:.3f}  band={band}")
+        print(f"  {iid}  [{doc_item.status}]  confidence={conf_str}  band={band}")
         print(f"  Question: {doc_item.question[:80]}{'...' if len(doc_item.question) > 80 else ''}")
+        ref = refine_by_item.get(iid)
+        if ref and ref.get("optimized") != ref.get("original"):
+            opt = ref.get("optimized", "")
+            print(f"  Refined query → {opt[:90]}{'...' if len(opt) > 90 else ''}")
         if routing and routing.should_route:
             print(f"  ROUTED → queue={routing.queue}  reason={routing.reason_code}")
         else:
@@ -107,6 +129,11 @@ def main() -> None:
         if len(doc_item.draft_text) > 200:
             preview += "..."
         print(f"  Draft: {preview}")
+
+    # Stage 10: confirm the <thinking> scaffold never leaked into a drafted answer.
+    leaked = [d.item_id for d in result.response_doc.items if "<thinking>" in d.draft_text]
+    print()
+    print(f"<thinking> stripped from all drafts: {not leaked}" + (f"  LEAK={leaked}" if leaked else ""))
 
     # Simulate human approval for non-routed, non-sensitive items and export
     updated_items = []

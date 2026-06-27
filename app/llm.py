@@ -28,7 +28,47 @@ from app.config import (
     MAX_OUTPUT_TOKENS,
     UNGROUNDED_PLACEHOLDER,
 )
+from app.query_optimizer import strip_thinking_block
 from app.schema import Citation, ContextStack, DraftAnswer
+
+
+# ---------------------------------------------------------------------------
+# Live-lane prompt scaffolds (Stage 10) — named constants, never inline prose.
+# The <thinking> reasoning these request is ALWAYS stripped by code before any
+# gate/export sees it (strip_thinking_block); it is a quality scaffold, NOT a
+# governance mechanism — the RULE_* chokepoints stay code-enforced (CLAUDE.md §5).
+# ---------------------------------------------------------------------------
+
+# QUERY_REFINEMENT directive: reason in <thinking>, emit ONLY clean keywords after it.
+_REFINE_DIRECTIVE: str = (
+    "You optimize search queries for a security / compliance questionnaire knowledge base.\n"
+    "Analyze the user question, expand it with synonyms and technical context related to our "
+    "KB domain, and output only an optimized search query for our knowledge base.\n"
+    "First, inside <thinking>...</thinking>, decompose the question, identify the security "
+    "concepts, and expand them into technical synonyms for optimal BM25 retrieval.\n"
+    "Then, AFTER the closing </thinking> tag, output ONLY the space-separated clean keywords — "
+    "no prose, no punctuation, no explanation.\n"
+    "Example:\n"
+    "Question: How do you handle data encryption?\n"
+    "<thinking>Concept: encryption at rest/transit. Synonyms: AES-256, TLS, SSL, KMS.</thinking> "
+    "encryption AES TLS rest transit"
+)
+_REFINE_MAX_TOKENS: int = 256  # a refined query is short; bound the refinement call
+
+# DRAFT reasoning directive: map chunks → points, self-check sensitivity + contradictions,
+# then write the cited answer AFTER the thinking block (which the code strips).
+_DRAFT_THINKING_DIRECTIVE: str = (
+    "Before writing the answer, reason inside <thinking>...</thinking> covering:\n"
+    "(a) context mapping: which retrieved [chunk_id] chunks support which points of your answer;\n"
+    "(b) constraint check (RULE_SENSITIVITY_GATE): note any chunk marked internal/restricted that "
+    "must not be asserted without human review;\n"
+    "(c) contradiction check: note any conflict between the retrieved chunks.\n"
+    "Then, AFTER the closing </thinking> tag, write the professional response and cite every chunk "
+    "you use with its [chunk_id] marker (cite at least one). Do NOT repeat the thinking.\n"
+    "Example:\n"
+    "<thinking>kb-001 confirms AES-256 at rest; kb-014 SOC2 Type II; no conflicts.</thinking> "
+    "We encrypt customer data at rest with AES-256 [kb-001] and maintain SOC2 Type II compliance [kb-014]."
+)
 
 
 # ---------------------------------------------------------------------------
@@ -60,6 +100,20 @@ class LLMProvider(ABC):
             never raise, never return a partial/invented answer (DRAFT2).
         """
         ...
+
+    def refine_query(self, question: str) -> str:
+        """Refine a raw question into an optimized search query (Stage 10, QUERY_REFINEMENT).
+
+        Concrete default = IDENTITY (return the question unchanged). This is deliberately
+        NOT abstract: existing LLMProvider subclasses (and MockLLM) implement only draft(),
+        and the identity default means the offline/graded path leaves the retrieval query
+        byte-identical — RET2/RET3 and the deterministic suite are unaffected.
+
+        Only ClaudeLLM (the live lane) overrides this with real query expansion. The caller
+        app/query_optimizer.refine_query() strips any <thinking> reasoning and falls back to
+        the original question on unusable output, so retrieval always gets a valid query.
+        """
+        return question
 
 
 # ---------------------------------------------------------------------------
@@ -156,27 +210,65 @@ class ClaudeLLM(LLMProvider):
     """
 
     def _build_prompt(self, context_stack: ContextStack) -> str:
-        """Build the prompt string from the 4 layers of the context stack.
+        """Build the prompt string from the context stack.
 
-        The 4-layer order is: Instruction → Retrieval → Constraint → State.
-        Everything the model sees comes from the ContextStack; nothing else.
+        Order: Instruction → Question → Retrieval → Constraint → State → Task.
+        Everything the model sees comes from the ContextStack; nothing else. The QUESTION
+        block (Stage 10) carries the ORIGINAL questionnaire question so the model answers
+        the actual question rather than reverse-engineering it from the retrieved chunks.
+        The TASK requests a <thinking> block (stripped by code in draft()).
         """
         retrieval_block = "\n".join(
             f"  {entry}" for entry in context_stack.retrieval
         ) or "  (no retrieved evidence)"
 
+        question_block = ""
+        if context_stack.question:
+            question_block = f"=== QUESTION ===\n{context_stack.question}\n\n"
+
         return (
             f"=== INSTRUCTIONS ===\n{context_stack.instruction}\n\n"
+            f"{question_block}"
             f"=== RETRIEVAL CONTEXT ===\n{retrieval_block}\n\n"
             f"=== CONSTRAINTS ===\n{context_stack.constraint}\n\n"
             f"=== STATE ===\n{context_stack.state}\n\n"
             "=== TASK ===\n"
-            "Draft a grounded answer to the questionnaire item above. "
-            "Cite every chunk you draw from using its [chunk_id] marker exactly as shown "
-            "in the Retrieval Context. "
-            "If the retrieved evidence is insufficient, say so clearly rather than speculating. "
-            "Return your answer as plain text."
+            f"{_DRAFT_THINKING_DIRECTIVE}\n"
+            "Draft a grounded answer to the QUESTION above using ONLY the Retrieval Context. "
+            "Cite every chunk you draw from using its [chunk_id] marker exactly as shown. "
+            "If the retrieved evidence is insufficient, say so clearly rather than speculating."
         )
+
+    def refine_query(self, question: str) -> str:
+        """Live QUERY_REFINEMENT (Stage 10): expand the question into an optimized search query.
+
+        Calls Claude with _REFINE_DIRECTIVE (reason in <thinking>, emit clean keywords after).
+        Returns the RAW model text; app/query_optimizer.refine_query() strips <thinking> and
+        validates. On ANY error/empty output, degrades to the original question (never raises).
+        """
+        try:
+            from app.config import _get_claude  # noqa: PLC0415 — deferred intentionally
+            client = _get_claude()
+
+            prompt = f"{_REFINE_DIRECTIVE}\n\nQuestion: {question}"
+            response = client.messages.create(
+                model=DRAFT_MODEL,
+                max_tokens=_REFINE_MAX_TOKENS,
+                temperature=DRAFT_TEMPERATURE,
+                messages=[{"role": "user", "content": prompt}],
+            )
+
+            raw_text: str = ""
+            for block in response.content:
+                if hasattr(block, "text"):
+                    raw_text += block.text
+
+            raw_text = raw_text.strip()
+            return raw_text if raw_text else question
+
+        except Exception:
+            # Refinement is best-effort; degrade to the original question (RULE_SAFE_TERMINAL spirit).
+            return question
 
     def draft(self, context_stack: ContextStack) -> DraftAnswer:
         """Call the Claude API and return a DraftAnswer.
@@ -208,10 +300,18 @@ class ClaudeLLM(LLMProvider):
             if not raw_text:
                 return DraftAnswer(text=UNGROUNDED_PLACEHOLDER, citations=[])
 
-            # Parse citations from the response text
-            citations = _parse_citations(raw_text, context_stack.retrieval)
+            # Stage 10: strip the <thinking> reasoning BEFORE parsing citations and BEFORE
+            # building the DraftAnswer, so grounding_check + export only ever see the clean,
+            # citation-bearing answer (an un-stripped reasoning block would dilute coverage
+            # and leak reasoning into the exported document).
+            clean_text = strip_thinking_block(raw_text)
+            if not clean_text:
+                return DraftAnswer(text=UNGROUNDED_PLACEHOLDER, citations=[])
 
-            return DraftAnswer(text=raw_text, citations=citations)
+            # Parse citations from the cleaned response text
+            citations = _parse_citations(clean_text, context_stack.retrieval)
+
+            return DraftAnswer(text=clean_text, citations=citations)
 
         except Exception:
             # DRAFT2: any error (API error, timeout, parse failure, missing key) degrades

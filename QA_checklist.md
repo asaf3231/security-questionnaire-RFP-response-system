@@ -211,3 +211,21 @@ Maintained by: Asaf
 ### Live, gated checks (skipped without `ANTHROPIC_API_KEY`)
 `DRAFT2` (real-lane error path) and the `make demo-live` smoke are the only live checks; everything
 else is offline and deterministic. A live check is **SKIPPED, never failed**, when the key is absent.
+
+---
+
+## §16. Intelligent Query Refinement (`QREF*`, `DRAFT-COT*`) — Stage 10 (ADD-only)
+
+> New LLM stage **before** retrieval (raw question → optimized search query) + the original question
+> reaching the draft prompt + a `<thinking>` reason-then-strip scaffold. Verified offline/deterministic
+> (`tests/test_stage10_query_refinement.py`, 25 tests). The `<thinking>` self-checks are **defense-in-depth
+> UX, not enforcement** — the `RULE_*` chokepoints stay code-enforced (CLAUDE.md §5). Cross-references the
+> Stage 3 modules (`context_stack.py`, `llm.py`, `draft.py`) without retro-editing the ✅ Stage 3/4 DoD.
+
+| ID | Gate | How it is checked |
+|---|---|---|
+| `QREF1` | `<thinking>` strip is deterministic & total | `strip_thinking_block` removes well-formed, dangling-open, case-insensitive, and multiple blocks; empty remainder → caller fallback (`TestStripThinkingBlock`) |
+| `QREF2` | Refinement is identity offline + safe-fallback | `MockLLM.refine_query(q) == q` (offline determinism preserved); the `app/query_optimizer.refine_query` wrapper degrades to the original question on empty / thinking-only / non-alphanumeric / exception / runaway-length output (`TestRefineQueryWrapper`) |
+| `QREF3` | Pipeline injects + audits the stage | `run_pipeline` emits one `refine_query` `tool_call` audit event per item with `original` + `optimized`; offline `optimized == original`; a rewriting provider's optimized query is the one audited (`TestPipelineRefinement`) |
+| `DRAFT-COT1` | Original question reaches the draft prompt | `assemble_context(...).question == item.question`; `item.question in ClaudeLLM()._build_prompt(stack)` (the **defect regression**); the prompt carries the `<thinking>` directive; pre-Stage-10 `ContextStack(...)` still validates (default `""`) (`TestContextStackQuestion`) |
+| `DRAFT-COT2` | Draft strips `<thinking>` before gate/export | with only the Anthropic client faked (real `_build_prompt`/`draft`/strip path), a `<thinking>…</thinking> answer [chunk_id]` response yields `DraftAnswer.text` with no `<thinking>` and a parsed citation; a thinking-only response degrades to `UNGROUNDED_PLACEHOLDER`; `MockLLM` never emits `<thinking>`; the directive constants carry the three required checks (`TestDraftThinkingStrip`, `TestPromptScaffoldConstants`) |

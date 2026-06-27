@@ -55,6 +55,7 @@ Status values: ⬜ Not started · 🔄 In progress · 🟡 Awaiting verification
 | 7 | Offline eval harness + Option-A routing + confidence refactor | `EVAL1`–`EVAL3`, `RET2`, `LEAK4`–`LEAK5` | ✅ | ✅ Complete via honest re-do **7r** (2026-06-27; first attempt 39469d0 REJECTED as fabricated → fixed; suite 315/1, eval-006 honestly caught — see FACTS) |
 | 8 | Anti-leakage & packaging hardening | `LEAK1`–`LEAK-S`, `PKG1`–`PKG3`, `SEC1`–`SEC2`, `META-*` | ✅ (+sec-scan) | ✅ Complete (2026-06-27; suite 373/1; security scan CLEAN — see FACTS) |
 | 9 | Brief/Deck + Technical Appendix | `DOC1`–`DOC2` | — | ⬜ Not started |
+| 10 | Intelligent Query Refinement (LLM query expansion + reasoning-scaffolded draft) | `QREF1`–`QREF3`, `DRAFT-COT1`–`DRAFT-COT2` | ✅ `/code-review` | 🟡 Awaiting verification (PM-implemented 2026-06-27; suite 563/1/2; add-only; pending `/code-review` + Asaf sign-off + commit) |
 
 **Reviewer-gate trigger (this project):** on any stage that touches a **graded contract** — a §9
 named constant, a tool/function signature, the `LLMProvider` interface, a `app/schema.py` Pydantic
@@ -290,6 +291,39 @@ governance gate.
   routing, audit/logging; consistent with shipped code.
 **Reviewer gate:** — (docs; PM verifies numbers against `FACTS.md`).
 **Status:** ⬜ Not started.
+
+---
+
+## Stage 10 — Intelligent Query Refinement (Asaf architectural directive, 2026-06-27)
+**Goal:** Add an LLM **QUERY_REFINEMENT** stage before retrieval (raw question → optimized search query
+via synonym/technical expansion), route the **original** question into the draft prompt (fixing a defect
+where it never reached the model), and scaffold the live Refinement + Draft prompts with `<thinking>`
+reasoning that code deterministically strips before any gate/export sees it.
+**Inputs:** `CLAUDE.md` §5/§8/§9; the live-lane flow; `redteam/LIVE_RUN_FINDINGS.md` baseline.
+**Outputs:** NEW `app/query_optimizer.py`; additive edits to `app/schema.py` (`ContextStack.question`),
+`app/llm.py` (`LLMProvider.refine_query` identity default + `ClaudeLLM` override + `<thinking>` strip +
+QUESTION block), `app/context_stack.py`, `app/pipeline.py` (refine + audit before retrieve),
+`scripts/run_live_draft.py`; NEW `tests/test_stage10_query_refinement.py` (25 tests).
+**Definition of Done (QA: `QREF1`–`QREF3`, `DRAFT-COT1`–`DRAFT-COT2`):**
+- [x] `QREF1` — `strip_thinking_block` deterministic & total (well-formed / dangling / multiple / case).
+- [x] `QREF2` — `refine_query` identity offline (MockLLM ⇒ determinism preserved) + safe fallbacks
+  (empty / thinking-only / non-alphanumeric / exception / runaway length → original question).
+- [x] `QREF3` — pipeline injects + audits the stage (`refine_query` event, `original`/`optimized`).
+- [x] `DRAFT-COT1` — original question reaches the draft prompt (defect regression green); backward-compatible.
+- [x] `DRAFT-COT2` — `ClaudeLLM.draft` strips `<thinking>` before gate/export (real path, only client faked);
+  MockLLM never emits `<thinking>`; directive constants carry the three checks.
+- [x] **Determinism preserved:** full suite 563/1/2 = 538 baseline + 25 add-only, **pre==post ⇒ 0 regressions**;
+  `make eval` metrics unchanged; `make demo` clean; add-only honored (no locked test/fixture touched).
+**Graded contracts touched (additive, Asaf-directed):** `LLMProvider` interface, `ContextStack` schema,
+`app/pipeline.py` chokepoint, the `_build_prompt`/`draft` prompt+strip path. **NOT** touched: `AGENT_TOOLS`,
+literals, thresholds, routing table, audit-event schema, any `RULE_*`, any locked test/fixture.
+**Caveat (recorded):** the in-`<thinking>` `RULE_SENSITIVITY_GATE`/contradiction self-checks are
+defense-in-depth UX, **not** enforcement — the code chokepoints remain the governance (CLAUDE.md §5).
+**Reviewer gate:** `/code-review` (contract-touching) — PENDING. **Ledger deviation (Asaf nod requested):**
+the `<thinking>` grep-checks live in the **new Stage 10 DoD**, not retro-edited into the ✅ Stage 3/4 DoD
+(ledger integrity). **NEW QA IDs:** `QREF1`–`QREF3`, `DRAFT-COT1`–`DRAFT-COT2` (QA §16).
+**Status:** 🟡 Awaiting verification — PM-implemented + suite/eval/demo verified 2026-06-27; pending
+`/code-review` + Asaf sign-off + commit.
 
 ---
 

@@ -43,6 +43,7 @@ from app.context_stack import assemble_context
 from app.draft import draft_answer, grounding_check
 from app.kb import load_kb, load_policy_tags
 from app.llm import LLMProvider, MockLLM
+from app.query_optimizer import refine_query
 from app.retrieval import Retriever
 from app.routing import route_for_review
 from app.confidence import score_confidence
@@ -167,10 +168,33 @@ def run_pipeline(
             )
 
             # ----------------------------------------------------------------
-            # 2. RETRIEVE — score query against the full corpus; apply filters
+            # 1b. QUERY_REFINEMENT (Stage 10) — optimize the search query via the LLM
+            # BEFORE retrieval. MockLLM returns identity (offline determinism preserved);
+            # ClaudeLLM expands with synonyms/technical terms. refine_query degrades to the
+            # original question on any failure (RULE_SAFE_TERMINAL spirit).
+            # ----------------------------------------------------------------
+            optimized_query = refine_query(item.question, provider=provider)
+            write_audit(
+                new_audit_event(
+                    questionnaire_id=questionnaire_id,
+                    item_id=item_id,
+                    event="tool_call",
+                    from_state=current_state,
+                    rule=RULE_AUDIT_COMPLETE,
+                    detail={
+                        "tool": "refine_query",
+                        "original": item.question,
+                        "optimized": optimized_query,
+                    },
+                ),
+                log_path=audit_log_path,
+            )
+
+            # ----------------------------------------------------------------
+            # 2. RETRIEVE — score the OPTIMIZED query against the full corpus; apply filters
             # ----------------------------------------------------------------
             chunks = retriever.retrieve(
-                item.question,
+                optimized_query,
                 topic_tags=item.topic_tags if item.topic_tags else None,
             )
             write_audit(

@@ -111,6 +111,76 @@ Seven concrete, grep/test-enforced failures, each a `RULE_*`: (1) grounding/hall
 
 ## Stage decisions
 
+### D-S10 — Intelligent Query Refinement (Asaf architectural directive, 2026-06-27; PM-implemented)
+**What & why:** Asaf directed a new LLM **QUERY_REFINEMENT** stage before retrieval (raw question →
+optimized search query with synonyms/technical terms) + routing the **original** question into the draft
+prompt. The draft-prompt routing also fixes a **real defect** PM found: `item.question` never reached
+`ClaudeLLM._build_prompt` (verified `in prompt == False`), so the live model had to reverse-engineer the
+question from chunks; the offline suite missed it because `MockLLM` ignores the question. Both folded into
+one stage with Asaf's `<thinking>` "reason-then-strip" enrichment.
+**Key design decisions (confirmed with Asaf):**
+- `LLMProvider.refine_query` is a **concrete identity default** (not abstract) — existing provider test
+  doubles implement only `draft()`, and identity ⇒ **MockLLM inherits identity ⇒ offline retrieval is
+  byte-identical ⇒ determinism preserved** (suite 538→563 add-only, `make eval` unchanged, 0 regressions).
+- **Internal pipeline stage, NOT an `AGENT_TOOLS` entry** (Asaf chose this) ⇒ no locked-test edit, fully
+  add-only, `ALLOW_GRADED_EDIT` never set.
+- Original question carried via a **new optional `ContextStack.question` field** (Asaf chose); rendered as
+  a `=== QUESTION ===` block; `INSTRUCTION_CONTEXT` kept byte-exact.
+- `<thinking>` scaffolds Refinement + Draft; a deterministic regex (`strip_thinking_block`) removes it
+  **before grounding/citation/export** so reasoning never dilutes coverage or leaks into the answer.
+**How to apply / caveats (PM judgment surfaced to Asaf):**
+- **PROMPT ≠ GOVERNANCE.** The in-`<thinking>` `RULE_SENSITIVITY_GATE`/contradiction self-checks are
+  defense-in-depth UX only; the code chokepoints (`export.py`/`routing.py`/`draft.py`) remain the
+  enforcement (CLAUDE.md §5). Grep checks assert the *prompt contains the directive*, never model obedience.
+- **Few-shot corrected:** Asaf's draft example had no `[chunk_id]` — but the gate requires ≥1 citation
+  (live drafts already fail this 56/100, `redteam/LIVE_RUN_FINDINGS.md`), so the shipped few-shot includes
+  citations.
+- **Ledger-integrity deviation (Asaf nod requested):** grep-checks placed in the **new Stage 10 DoD + QA
+  §16** rather than retro-edited into the ✅ Stage 3/4 DoD (rewriting a closed stage corrupts the ledger).
+- **Live-quality risk (measure, don't gate):** query expansion changes BM25 inputs ⇒ live retrieval/
+  grounding may shift; measure before/after with `scripts/run_live_suite.py`. See [[D-GOV1]] (add-only lock).
+
+### D-GOV1 — Governance hardening / anti-gaming enforcement layer (a.k.a. GOV-HARDENING) — BINDING; Asaf FINAL SIGN-OFF 2026-06-27 (committed 100c0f3)
+**Architectural rationale (the why — permanent record):** GOV-FAIL-S7 proved that prose-only governance
+has no teeth — the existing `RULE_NO_FABRICATED_METRIC` + verifier-independence were *violated while the
+suite stayed green*, because three loopholes were unnamed (gold-fitting, internal-gate simulation,
+tautological metrics) and nothing **mechanically** blocked the bad diff. D-GOV1 adds named rules + a
+mechanical pre-flight so the defining move (editing the answer key to go green) is impossible without a
+human in the loop. Written to be **portable** across projects: the methodology spine
+(`PM_Methodology_Prompt.md` → Metric Integrity & Anti-Gaming #4–#7 + the generalized graded-artifact-set
+Verifier-Independence + the 3 named Red Flags) carries the principles; `LOCKED_PATHS` in
+`scripts/check_graded_artifacts.sh` is the single per-project knob. Verified live: gate aborts on a
+modify/delete in the locked set, the human override clears it, additions pass, `make test` → 315/1.
+**Human-nod record (RULE_GRADED_ARTIFACT_LOCK two-key model):** the same Asaf sign-off (2026-06-27) also
+**explicitly authorized the 7r graded-contract changes** — `grounding_check(question=...)` +
+`GROUNDING_QUESTION_COVERAGE_MIN=0.30` — closing the lexical-grounding limitation. These are now approved,
+not pending.
+Asaf institutionalized the GOV-FAIL-S7 lesson as two governance-tier rules + a Make pre-flight:
+- `RULE_GRADED_ARTIFACT_LOCK` (QA `META-LOCK`) — `tests/`+`fixtures/` are read-only for modify/delete;
+  ADD is allowed; modify/delete aborts `make test`/`make eval` (via `scripts/check_graded_artifacts.sh`)
+  unless the **human-only** two-key `ALLOW_GRADED_EDIT=1` is set. **An autonomous agent NEVER sets it.**
+- `RULE_METRIC_FALSIFIABLE` (QA `META-FALSIFY`/`META-REALPATH`/`META-PROVENANCE`) — real internal path
+  (no `_simulate_*`), a required red negative fixture (no tautology), spec-first gold (not output-fitted).
+**How to apply:** every future stage is add-only for the graded set; eval/metrics must keep a negative
+case + run the real path; gold provenance is documented (a NEW file, not a fixture edit, to respect the lock).
+
+### D-S8 — Stage 8 packaging/hardening design (2026-06-27; PM)
+- **venv-clean Makefile (req #1):** keep Asaf's `integrity` pre-flight; make `test`/`demo`/`eval` use
+  `.venv/bin/python` / `.venv/bin/pytest` with a guard that errors with a bootstrap message if `.venv`
+  is missing (no silent fallback to system python — that caused the rank_bm25 failures). Eval path
+  already `app/eval/harness.py` (RESOLVED) — confirm, no rename.
+- **Anti-leakage (req #2):** `.gitignore` completeness; grep `app/` for debug (`print(`/`breakpoint`/
+  `pdb`/`TODO`/`FIXME`); eval `fixtures/` are dev-only (excluded from the package boundary); re-verify
+  all 7 `LEAK*` over the full tracked set.
+- **Packaging (req #3):** minimal `pyproject.toml` declaring `app` as the package + python>=3.11
+  (tests/fixtures excluded from any dist); README "package boundary + run-from-clean-checkout" section;
+  track ONE redacted sample export (.md + .csv) + audit (.jsonl) in a tracked location (CLAUDE §2);
+  clean working tree.
+- **META-PROVENANCE (lock-safe):** add a NEW `fixtures/eval/PROVENANCE.md` mapping each gold case to its
+  spec rationale (ADD, not a fixture edit — respects RULE_GRADED_ARTIFACT_LOCK).
+- **Gate (req #4):** suite (315+) + `make eval` green → mandatory **`/security-review`** governance gate
+  on the repo → HALT at the final boundary for Asaf's sign-off / production release.
+
 ### GOV-FAIL-S7 — Stage 7 REJECTED by Asaf: fabricated eval (2026-06-27) — PM QA miss OWNED
 **What happened:** the Stage-7 eval harness was fitted to hide a real bug, violating
 `RULE_NO_FABRICATED_METRIC`/`LEAK5`: (1) `_simulate_grounding()` faked grounding (tautological
@@ -286,6 +356,9 @@ Stage 4 ✅ — handbacks/stage-4.md · verdict APPROVE (D-S4 constants added+sy
 Stage 5 ✅ — handbacks/stage-5.md · verdict APPROVE (no findings; D-S5 schema+reason-codes added+synced) · tag stage-5-export
 Stage 6 ✅ — handbacks/stage-6.md · verdict APPROVE (no correctness findings; Recall@K held 1.0; ERROR_TERMINAL synced) · tag stage-6-pipeline
 Stage 7 ⚠️→✅ — first attempt handbacks/stage-7.md REJECTED (fabricated eval, GOV-FAIL-S7); honest re-do handbacks/stage-7r.md · verdict APPROVE · tag stage-7-eval (honest)
+Stage 8 ✅ — handbacks/stage-8.md · verdict APPROVE (suite 373/1; venv-clean Makefile; add-only honored; security scan CLEAN) · commit 50b90c8 · tag stage-8-packaging
+Stage 10 ✅ — Intelligent Query Refinement (Asaf directive, D-S10) · PM-implemented on `redteam/crazy-testing` · suite 565/1/2 (538+27 add-only, 0 regressions); `make eval` unchanged; defect fixed (question→draft prompt); `/code-review` (1 indep) → 2 findings FIXED · Asaf signed off 2026-06-27
+> **Stage-10 naming reconciliation (Asaf 2026-06-27):** the *query-refinement* workstream is **Stage 10**; the separate *data/KB-expansion* workstream (PM_LOG SESSION START, `tests/test_stage10_expansion.py`) is renumbered **Stage 11** — that session should adopt Stage 11 on resume.
 
 ### D-S7r status (2026-06-27) — IMPLEMENTED & PM-verified (the honest fix)
 PM independently verified via the REAL pipeline (not the harness's self-report): eval-006 → grounded=False
