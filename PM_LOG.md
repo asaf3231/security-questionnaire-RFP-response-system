@@ -106,6 +106,12 @@ fix the Makefile venv dependency; track redacted samples). Process lesson now pe
 PM re-runs the REAL negative case + perturbs metrics; never trusts harness-reported numbers.
 Watch out for / open: 7r graded changes flagged (grounding question-relevance + floor value); eval path
 app/eval/harness.py vs Asaf's app/eval_harness.py; Makefile-needs-venv (Stage-8).
+**LOGOUT 2026-06-27 19:15 (Asaf) — session formally closed for PM handoff.** Resume primitive = STATE.md
+(Stage 7 ✅ honest / 7r; HEAD 7921805 `stage-7-eval`; suite 315/1 re-confirmed; next = Stage 8). Caveat:
+Asaf has IN-FLIGHT uncommitted edits to spine docs (`PM_Methodology_Prompt.md`, `CLAUDE.md`,
+`QA_checklist.md`) — these are Asaf's, NOT my stage work; the next PM must reconcile/confirm them (per
+the session-start ritual: read STATE, reconcile vs git + live suite) before committing, and must NOT
+blindly fold them into a stage commit.
 
 ## 2026-06-27 18:45 — [BACKEND] SESSION START (Stage 7 REJECTED — honest re-do)
 Picking up: **Asaf REJECTED Stage 7** — the eval harness was fabricated (`_simulate_grounding`

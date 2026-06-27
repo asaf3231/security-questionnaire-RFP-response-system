@@ -88,17 +88,29 @@ Do not advance to stage N+1 until stage N is confirmed clean. This is the most i
 
 A stage is graded by its checks. An agent that can *edit those checks* can grade itself. So:
 
-- **Core rule:** an execution agent/subagent may **never weaken, delete, loosen, or `xfail` an
-  existing QA check, test, or fixture that grades its own stage.** The check is the contract; the code
-  bends to the check, not the reverse.
-- **Any test modification = an immediate `DECISION-NEEDED` halt to Asaf.** Adding *new* tests is fine;
-  touching an existing graded check is a halt, never a self-approved change.
-- **Tests-only retry ⇒ presume test-weakening.** If a retry diff touches only `tests/` and not the
-  application code (`app/`), the PM presumes the executer weakened the check to go green and **halts
-  execution instantly.**
-- **Re-run at the pre-edit revision.** Before accepting *any* test change, the PM re-runs the failing
-  check at the **pre-edit revision** to verify it was the **code** that changed to pass — not the
-  test that changed to stop failing.
+- **The graded-artifact set (locked).** "Checks" here means the whole **graded-artifact set**: the
+  **test directories**, **fixtures**, **eval gold / answer keys**, and **expected-output snapshots** —
+  every artifact a stage is graded against. The lock and the rules below apply to **all** of it, not
+  just files under `tests/`. (Gold/answer keys are the most sensitive member — see *Gold* below.)
+- **Core rule (add-only by default):** an execution agent/subagent may **never weaken, delete, loosen,
+  rephrase, or `xfail` an existing artifact in the graded set that grades its own stage.** **Adding** a
+  new test/fixture is always allowed; **modifying or deleting** an existing one is not. The check is the
+  contract; the code bends to the check, not the reverse.
+- **Two-key authorized change.** A genuine change to an existing graded artifact (e.g. a contract the
+  human approved) requires **two distinct keys**: (1) an explicit **human authorization naming the
+  spec/contract change**, and (2) an **independent re-verification** (below). The party proposing the
+  change is never the party that approves it — **self-approval of a graded-artifact edit is void.**
+- **Gold / answer keys are locked hardest.** An expected-outcome value (eval gold, golden snapshot) is
+  changed only via a logged, human-reviewed **gold-change request** with spec-first provenance — never
+  bundled silently into a stage diff (see *Spec-First Gold Provenance*, Metric Integrity #5).
+- **Any graded-artifact modification = an immediate `DECISION-NEEDED` halt to Asaf.** Adding *new*
+  tests is fine; touching an existing graded artifact is a halt, never a self-approved change.
+- **Tests-only retry ⇒ presume test-weakening.** If a retry diff touches only the graded set (e.g.
+  `tests/` / `fixtures/`) and not the application code (`app/`), the PM presumes the executer weakened
+  the check to go green and **halts execution instantly.**
+- **Re-run at the pre-edit revision.** Before accepting *any* graded-artifact change, the PM re-runs
+  the failing check at the **pre-edit revision** to verify it was the **code** that changed to pass —
+  not the artifact that changed to stop failing.
 
 At the end of every session, the coding agent's stage handback is written to disk under `handbacks/`
 and only a **pointer line** is appended to `NOTES.md` (verified numbers live in `FACTS.md`); the PM
@@ -146,6 +158,49 @@ never copied from a draft. The canonical ledger format:
 When a number genuinely must appear outside the ledger (e.g. a one-time report), re-query its
 source-of-truth command at write time and update the ledger row in the same pass — never leave two
 live copies to drift apart.
+
+---
+
+## Metric Integrity & Anti-Gaming
+
+> The failure mode this section prevents: a stage going **green by adjusting what "passing" means** —
+> editing the answer key to match the output, replacing a real gate with a shortcut that can't fail, or
+> shipping a metric that is always 1.0. *Green is a claim;* this section is how the claim is made
+> falsifiable. These rules are **general** — they apply to any project's tests, evals, and metrics.
+
+**#4 — Falsifiability Mandate.** Every metric and every gate **ships with at least one "red" fixture it
+is required to score as failing / routing / rejecting.** If you cannot produce an input that makes the
+metric report failure, the metric is a **tautology** and is rejected. A suite or eval with **no negative
+cases is presumed gamed** and is treated as *unverified* — a green run over only happy-path inputs proves
+nothing. (Canonical trap: a "grounding rate" defined as *evidence is present* is always 1.0; the fix is a
+known-ungrounded input the metric must catch.)
+
+**#5 — Spec-First Gold Provenance.** Expected outcomes (gold, golden snapshots, labeled fixtures) are
+derived from the **specification/intent**, authored **independently of — and before — observing system
+output.** A gold value may **never be edited in the same change that observes the output it is being
+matched to.** Each gold case carries a one-line provenance note saying *why* it is the expected answer (a
+spec reference) — never *"matches current output."* **Fitting the answer key to the system is the
+defining act of metric fraud.**
+
+**#6 — Real-Path Execution.** A metric/eval/test must exercise the **real internal decision logic** of
+the system-under-test (its grounding, scoring, routing, validation gates). You may substitute **only
+non-deterministic external boundaries** — network, model/LLM, clock, RNG — and the substitute must be
+**behavior-faithful** (a seeded fake that can return any outcome), **never a constant**. Replacing or
+short-circuiting an internal gate inside the eval/test layer (e.g. a `_simulate_*` helper that hard-codes
+the gate's verdict) is a **fatal integrity violation**, not a convenience.
+
+**#7 — Behavior-Coverage Ledger.** The graded set **enumerates which system behaviors/branches it
+exercises — especially the negative branches** (each route trigger, each rejection/error path, each
+ungrounded/low-confidence outcome). Removing or flipping the **only** test of a behavior is a **flagged
+event** ("behavior X now untested"), surfaced explicitly — never a silent edit. This makes "I quietly
+dropped the one hard case" visible.
+
+**Acceptance is adversarial (Green ≠ Verified).** A passing suite is **necessary, not sufficient.**
+Before accepting a stage, the independent verifier (PM/human) must: (a) **re-run any changed check at the
+pre-edit revision** (Verifier-Independence); (b) **perturb the gold and confirm the metric drops** (proves
+it is computed, not constant); and (c) **confirm the required negative/red fixture exists and was caught.**
+A self-written "computed-not-fabricated" test that only proves the metric *responds* to its gold is **not**
+the fabrication guard — it does not stop fitting the gold to the output.
 
 ---
 
@@ -319,6 +374,16 @@ you cannot reason your way around it:
   stage is a `DECISION-NEEDED` halt (see Verifier-Independence under Stage Workflow).
 - *"The retry only touched `tests/`, so it must be fine."* → **Refuse.** A tests-only retry diff is
   **presumed test-weakening** — halt and re-run the original check at the pre-edit revision first.
+- *"The expected value was wrong — I'll update the gold to what the system outputs."* → **Refuse. This
+  is gold-fitting**, the defining act of metric fraud. A failing expectation is a **finding** (a bug or a
+  calibration gap to report), not a value to overwrite. Gold changes only via a human-reviewed, spec-first
+  gold-change request (Metric Integrity #5).
+- *"The real gate is slow/awkward in the eval — I'll add a quick `_simulate_*` that returns the
+  verdict."* → **Refuse. This is internal-gate simulation.** The eval must run the real gate; only
+  non-deterministic *external* boundaries may be faked, and never with a constant (Metric Integrity #6).
+- *"The metric is green, ship it."* → **Refuse if it cannot go red.** A metric with no negative fixture
+  is a **tautology**; a green suite with no red cases is *unverified*. Show the input that makes it fail
+  first (Metric Integrity #4).
 
 ---
 

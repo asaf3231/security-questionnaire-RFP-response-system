@@ -192,6 +192,22 @@ Maintained by: Asaf
 
 ---
 
+## §15. Governance-tier meta-gates (`META-*`) — `RULE_GRADED_ARTIFACT_LOCK`, `RULE_METRIC_FALSIFIABLE`
+
+> Process integrity, **not** pipeline behavior: these guard the verification itself against gaming
+> (gold-fitting, internal-gate simulation, tautological metrics). **General to any project.** Full
+> principles in `PM_Methodology_Prompt.md` → *Metric Integrity & Anti-Gaming* (#4–#7); registry rows in
+> `CLAUDE.md` §5.3. Run as a `make test` / `make eval` pre-flight **and** at every stage handback.
+
+| ID | Check | Pass condition |
+|---|---|---|
+| `META-LOCK` | **Graded-artifact set is locked** | `scripts/check_graded_artifacts.sh` scans the git diff of the locked set (`tests/`, `fixtures/`, eval gold / answer keys, expected-output snapshots) vs `HEAD`: **added** files pass; any **modified/deleted** line in an existing tracked artifact **aborts** `make test`/`make eval` non-zero unless the human override `ALLOW_GRADED_EDIT=1` is set. A failing test is a **finding**, never fixed by editing the test (`RULE_GRADED_ARTIFACT_LOCK`) |
+| `META-FALSIFY` | **Every metric/gate is falsifiable** | each metric/gate has ≥1 **"red" negative fixture** it is *required* to score as failing/routing/rejecting; running it on that fixture reports failure. A metric that cannot report failure (a tautology) fails this check; a suite/eval with **no negative cases is treated as unverified** (`RULE_METRIC_FALSIFIABLE`; Metric Integrity #4) |
+| `META-REALPATH` | **Eval runs the real internal path** | the eval/test imports and exercises the system's **real** internal gates (grounding/scoring/routing/validation); only non-deterministic **external** boundaries (network/clock/model/RNG) are substituted, and only with **behavior-faithful, non-constant** fakes. A `_simulate_*`/shortcut that hard-codes an internal gate's verdict **fails** this check (`RULE_METRIC_FALSIFIABLE`; Metric Integrity #6) |
+| `META-PROVENANCE` | **Gold is spec-first, not output-fitted** | every gold / expected-outcome case carries a provenance note deriving it from the **spec/intent**; no gold value was edited in the same change that observed the output it matches; gold changes trace to a human-reviewed gold-change request (`RULE_METRIC_FALSIFIABLE`; Metric Integrity #5; cross-refs Verifier-Independence) |
+
+---
+
 ### Live, gated checks (skipped without `ANTHROPIC_API_KEY`)
 `DRAFT2` (real-lane error path) and the `make demo-live` smoke are the only live checks; everything
 else is offline and deterministic. A live check is **SKIPPED, never failed**, when the key is absent.

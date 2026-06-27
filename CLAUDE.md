@@ -326,6 +326,26 @@ above and each grep- or test-enforced:
    disk only, only for human-`APPROVED` items, and emits `RULE_NO_EXTERNAL_SEND` to the audit log.
    (`BOUND1`)
 
+### 5.3 Governance-tier rules — metric integrity & graded-artifact locking (QA: `META-LOCK`, `META-FALSIFY`, `META-REALPATH`, `META-PROVENANCE`)
+Two **process-enforced** `RULE_*` guard the *verification process itself* (not the runtime pipeline) —
+they prevent a stage from going green by **gaming the checks** (fitting the answer key to the output,
+faking an internal gate, shipping a metric that can't fail). Full principles live in
+`PM_Methodology_Prompt.md` → *Metric Integrity & Anti-Gaming* (#4–#7).
+
+> **Why these are not `app/config.py` constants.** Unlike the 11 runtime rules in §5.1, these guard the
+> *test/eval process*, so they have **no app chokepoint and no runtime audit reason-code**. Their
+> chokepoint is the **`make test` / `make eval` pre-flight gate** (`scripts/check_graded_artifacts.sh`)
+> plus the QA `META-*` checks, and the grep-enforceable identifier string lives in that script.
+> (Analogous to `RULE_NO_SECRET`, which lives at the `.gitignore` + grep gate, not in app runtime.)
+
+| `RULE_*` (governance-tier) | One-line contract | Chokepoint | QA ID |
+|---|---|---|---|
+| `RULE_GRADED_ARTIFACT_LOCK` | The **graded-artifact set** — `tests/`, `fixtures/`, eval gold / answer keys, expected-output snapshots — is **read-only for modification/deletion**. **Adding** new tests/fixtures is allowed; **modifying/deleting** an existing one requires **two-key human authorization** naming the spec change (one-run override: `ALLOW_GRADED_EDIT=1`) + a pre-edit re-run. A failing check is a **finding**, never "fixed" by editing the check. | `scripts/check_graded_artifacts.sh` (Make pre-flight; aborts `test`/`eval` non-zero) | `META-LOCK` |
+| `RULE_METRIC_FALSIFIABLE` | Every metric/gate runs the **real internal path** (mock only external boundaries — network/clock/model/RNG — with behavior-faithful, **non-constant** fakes; no `_simulate_*` shortcut of an internal gate) and has a **required "red" negative fixture** it must catch (no tautology). Gold is **spec-first**, never fitted to output. | the eval/test layer + QA `META-*` meta-checks | `META-FALSIFY`, `META-REALPATH`, `META-PROVENANCE` |
+
+**The lock binds the agent; the human holds the override key.** `ALLOW_GRADED_EDIT=1` is the second key
+and must remain a **human** key — delegating it to an autonomous agent reopens the hole it closes.
+
 ---
 
 ## 6. Resiliency boundaries (QA: `PIPE2`, `DRAFT2`, `GROUND1`)
