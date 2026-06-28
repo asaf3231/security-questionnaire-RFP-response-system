@@ -36,6 +36,10 @@ DRAFT_MODEL: str = "claude-sonnet-4-6"   # pinned at Stage 1 (OQ-1); opus-4-8 sw
 MAX_OUTPUT_TOKENS: int = 1024
 DRAFT_TEMPERATURE: float = 0.0            # determinism in the live lane
 
+# Query refinement (Stage 10; LIVE lane only) — bounds on the QUERY_REFINEMENT call/output
+REFINE_MAX_TOKENS: int = 256              # a refined query is short; bound the refinement call
+MAX_REFINED_QUERY_CHARS: int = 512        # cap a refined query so a runaway response can't blow up retrieval
+
 # ---------------------------------------------------------------------------
 # Grounding (Stage 3) — RULE_GROUNDED_ONLY
 # ---------------------------------------------------------------------------

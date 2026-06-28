@@ -54,8 +54,8 @@ Status values: ⬜ Not started · 🔄 In progress · 🟡 Awaiting verification
 | 6 | End-to-end pipeline + the two demo cases | `PIPE1`–`PIPE2`, `DEMO1`–`DEMO2`, `RULE1`–`RULE2` | ✅ | ✅ Complete (2026-06-27; suite 278/1-skip — see FACTS) |
 | 7 | Offline eval harness + Option-A routing + confidence refactor | `EVAL1`–`EVAL3`, `RET2`, `LEAK4`–`LEAK5` | ✅ | ✅ Complete via honest re-do **7r** (2026-06-27; first attempt 39469d0 REJECTED as fabricated → fixed; suite 315/1, eval-006 honestly caught — see FACTS) |
 | 8 | Anti-leakage & packaging hardening | `LEAK1`–`LEAK-S`, `PKG1`–`PKG3`, `SEC1`–`SEC2`, `META-*` | ✅ (+sec-scan) | ✅ Complete (2026-06-27; suite 373/1; security scan CLEAN — see FACTS) |
-| 9 | Brief/Deck + Technical Appendix | `DOC1`–`DOC2` | — | ⬜ Not started |
-| 10 | Intelligent Query Refinement (LLM query expansion + reasoning-scaffolded draft) | `QREF1`–`QREF3`, `DRAFT-COT1`–`DRAFT-COT2` | ✅ `/code-review` | 🟡 Awaiting verification (PM-implemented 2026-06-27; suite 563/1/2; add-only; pending `/code-review` + Asaf sign-off + commit) |
+| 9 | Brief/Deck + Technical Appendix | `DOC1`–`DOC2` | — | ✅ Complete (2026-06-28; `brief/REINDEER_BRIEF.md` + `appendix/TECHNICAL_APPENDIX.md`; every number → FACTS) |
+| 10 | Intelligent Query Refinement (LLM query expansion; draft `<thinking>` scaffold removed 2026-06-28 per live evidence) | `QREF1`–`QREF3`, `DRAFT-COT1`–`DRAFT-COT2` | ✅ `/code-review` | ✅ Complete (2026-06-28; brief+handback authored, `/code-review` run — 1 finding FIXED; Asaf sign-off; suite — see FACTS) |
 
 **Reviewer-gate trigger (this project):** on any stage that touches a **graded contract** — a §9
 named constant, a tool/function signature, the `LLMProvider` interface, a `app/schema.py` Pydantic
@@ -286,11 +286,12 @@ governance gate.
 **Inputs:** the shipped repo; `FACTS.md`; `Assignment.md` evaluation rubric.
 **Outputs:** `brief/REINDEER_BRIEF.md`, `appendix/TECHNICAL_APPENDIX.md`.
 **Definition of Done (QA: `DOC1`–`DOC2`):**
-- [ ] `DOC1` — Brief/Deck: workflow, architecture, assumptions, success metrics; every number → `FACTS.md`.
-- [ ] `DOC2` — Technical Appendix: prompt/tool design, schema, guardrails (`RULE_*`), state changes,
-  routing, audit/logging; consistent with shipped code.
-**Reviewer gate:** — (docs; PM verifies numbers against `FACTS.md`).
-**Status:** ⬜ Not started.
+- [x] `DOC1` — `brief/REINDEER_BRIEF.md`: workflow, architecture, assumptions, success metrics; every
+  number references `FACTS.md` (incl. the honest live-grounding limitation).
+- [x] `DOC2` — `appendix/TECHNICAL_APPENDIX.md`: pipeline/module map, schema, prompt/tool design,
+  guardrails (`RULE_*`), state machine, routing precedence, audit/logging — consistent with shipped code.
+**Reviewer gate:** — (docs; PM verified numbers against `FACTS.md`).
+**Status:** ✅ Complete — authored 2026-06-28; numbers trace to `FACTS.md`.
 
 ---
 
@@ -303,27 +304,36 @@ reasoning that code deterministically strips before any gate/export sees it.
 **Outputs:** NEW `app/query_optimizer.py`; additive edits to `app/schema.py` (`ContextStack.question`),
 `app/llm.py` (`LLMProvider.refine_query` identity default + `ClaudeLLM` override + `<thinking>` strip +
 QUESTION block), `app/context_stack.py`, `app/pipeline.py` (refine + audit before retrieve),
-`scripts/run_live_draft.py`; NEW `tests/test_stage10_query_refinement.py` (25 tests).
+`scripts/run_live_draft.py`; NEW `tests/test_stage10_query_refinement.py` (27 tests at landing; 31 after the
+2026-06-28 cleanup — 1 COT test retired, 5 added). Brief: `briefs/stage-10.md`; handback: `handbacks/stage-10.md`.
 **Definition of Done (QA: `QREF1`–`QREF3`, `DRAFT-COT1`–`DRAFT-COT2`):**
-- [x] `QREF1` — `strip_thinking_block` deterministic & total (well-formed / dangling / multiple / case).
+- [x] `QREF1` — `strip_thinking_block` deterministic & total (well-formed / dangling / multiple / case /
+  **nested / token-fusion** added 2026-06-28; now a depth-aware scan, nested-safe).
 - [x] `QREF2` — `refine_query` identity offline (MockLLM ⇒ determinism preserved) + safe fallbacks
   (empty / thinking-only / non-alphanumeric / exception / runaway length → original question).
-- [x] `QREF3` — pipeline injects + audits the stage (`refine_query` event, `original`/`optimized`).
+- [x] `QREF3` — pipeline injects + audits the stage (`refine_query` event, `original`/`optimized`, `to_state` set).
 - [x] `DRAFT-COT1` — original question reaches the draft prompt (defect regression green); backward-compatible.
-- [x] `DRAFT-COT2` — `ClaudeLLM.draft` strips `<thinking>` before gate/export (real path, only client faked);
-  MockLLM never emits `<thinking>`; directive constants carry the three checks.
-- [x] **Determinism preserved:** full suite 563/1/2 = 538 baseline + 25 add-only, **pre==post ⇒ 0 regressions**;
-  `make eval` metrics unchanged; `make demo` clean; add-only honored (no locked test/fixture touched).
+- [x] `DRAFT-COT2` — `ClaudeLLM.draft` defensively strips `<thinking>` before gate/export (real path, only
+  client faked); MockLLM never emits `<thinking>`.
+- [x] **Determinism preserved:** full offline suite green (see FACTS), **0 offline regressions**;
+  `make eval` metrics unchanged; `make demo` clean; add-only honored except the authorized two-key COT retirement.
+**Revision (2026-06-28, two-key authorized — draft `<thinking>` scaffold REMOVED):** live evidence
+(`redteam/LIVE_RUN_FINDINGS.stage10.md` 25/100 grounded WITH vs `.nothinking.md` 40/50 WITHOUT) showed the
+draft scaffold suppressed inline citations and tanked live grounding. The draft prompt now requests inline
+`[chunk_id]` citations + answer-only; the dead `_DRAFT_THINKING_DIRECTIVE` constant was removed (§8); two
+draft-COT tests were retired under the two-key protocol (Asaf authorization + a pre-edit re-run proving the
+*prompt* changed). The refine-query `<thinking>` scaffold + the defensive draft-strip are retained.
 **Graded contracts touched (additive, Asaf-directed):** `LLMProvider` interface, `ContextStack` schema,
-`app/pipeline.py` chokepoint, the `_build_prompt`/`draft` prompt+strip path. **NOT** touched: `AGENT_TOOLS`,
-literals, thresholds, routing table, audit-event schema, any `RULE_*`, any locked test/fixture.
-**Caveat (recorded):** the in-`<thinking>` `RULE_SENSITIVITY_GATE`/contradiction self-checks are
-defense-in-depth UX, **not** enforcement — the code chokepoints remain the governance (CLAUDE.md §5).
-**Reviewer gate:** `/code-review` (contract-touching) — PENDING. **Ledger deviation (Asaf nod requested):**
-the `<thinking>` grep-checks live in the **new Stage 10 DoD**, not retro-edited into the ✅ Stage 3/4 DoD
-(ledger integrity). **NEW QA IDs:** `QREF1`–`QREF3`, `DRAFT-COT1`–`DRAFT-COT2` (QA §16).
-**Status:** 🟡 Awaiting verification — PM-implemented + suite/eval/demo verified 2026-06-27; pending
-`/code-review` + Asaf sign-off + commit.
+`app/pipeline.py` chokepoint, the `_build_prompt`/`draft` prompt+strip path, two new §9 constants
+(`REFINE_MAX_TOKENS`, `MAX_REFINED_QUERY_CHARS`). **NOT** touched: `AGENT_TOOLS`, byte-exact literals,
+thresholds, routing table, audit-event schema, any `RULE_*`.
+**Caveat (recorded):** the in-`<thinking>` self-checks were always defense-in-depth UX, **not** enforcement —
+the code chokepoints remain the governance (CLAUDE.md §5).
+**Reviewer gate:** ✅ `/code-review` (contract-touching) run 2026-06-28 — 1 finding (token-fusion in the
+rewritten strip) **FIXED** + regression test added; 1 low finding (CLAUDE §9 constants) addressed. **QA IDs:**
+`QREF1`–`QREF3`, `DRAFT-COT1`–`DRAFT-COT2` (QA §16).
+**Status:** ✅ Complete — PM-verified + `/code-review` + Asaf sign-off 2026-06-28; committed on
+`redteam/crazy-testing` (FACTS suite row carries the sha).
 
 ---
 

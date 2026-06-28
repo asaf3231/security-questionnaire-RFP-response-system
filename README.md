@@ -35,15 +35,18 @@ deterministic, seeded mock) — the graded offline path.
 
 ---
 
-## Later stages (arriving as the project progresses)
+## Other entry points
 
 - **`make demo`** — run the full pipeline end-to-end over the two demo cases using `MockLLM`
-  (mocked LLM, no network). Arrives at Stage 6.
+  (mocked LLM, no network).
 - **`make demo-live`** — gated live Claude draft using the real `anthropic` API (requires
   `ANTHROPIC_API_KEY` in `.env`). Still writes exports to local disk only — no external send.
-  Arrives at Stage 6.
+- **`make chat`** — interactive terminal REPL: type a security-questionnaire question and watch
+  Comet respond through the real pipeline (retrieved evidence, draft, citations, confidence band,
+  routing decision). Offline `MockLLM` by default — no key, no network. Use `make chat-live` (or
+  `:live` mid-session) for the gated Claude lane. Read-only: it never approves or exports.
 - **`make eval`** — run the offline evaluation harness (Recall@K, grounding rate, routing
-  accuracy, confidence calibration). Arrives at Stage 7.
+  accuracy, confidence calibration).
 
 ---
 
@@ -54,6 +57,7 @@ app/config.py      — all constants, RULE_* registry strings, lazy Claude gette
 app/schema.py      — Pydantic models (QuestionnaireItem, DraftAnswer, AuditEvent, …)
 app/kb.py          — KB + questionnaire + policy-tags load & validate
 app/retrieval.py   — deterministic lexical retrieval via rank_bm25 (Stage 2)
+app/query_optimizer.py — QUERY_REFINEMENT before retrieve: refine_query + strip_thinking_block (live-lane only; Stage 10)
 app/context_stack.py — 4-layer "backpack" assembler (Stage 3)
 app/llm.py         — MockLLM (offline) + ClaudeLLM (gated live lane) (Stage 3)
 app/draft.py       — draft_answer + grounding_check (Stage 3)
@@ -101,7 +105,7 @@ Governance is enforced in **code**, not prompts: every boundary is a `RULE_*` co
 |---|---|
 | `tests/` | Offline deterministic pytest suite |
 | `fixtures/` | Labeled eval gold + Recall@K gold (held-out; synthetic) |
-| `scripts/` | Demo runners (`run_demo.py`, `run_live_draft.py`) + integrity pre-flight |
+| `scripts/` | Demo runners (`run_demo.py`, `run_live_draft.py`), the `run_chat.py` REPL + integrity pre-flight |
 | `exports/` | **gitignored** — machine-local generated response docs |
 | `audit/` | **gitignored** — machine-local append-only JSONL audit logs |
 | `.venv/` | **gitignored** — virtual environment |
@@ -123,7 +127,7 @@ cp .env.example .env
 # Edit .env and add ANTHROPIC_API_KEY — NEVER commit your .env
 
 # Run targets (all use .venv/bin/python — no manual venv activation needed after bootstrap)
-make test       # offline deterministic pytest suite (no .env, no network; 315+ tests)
+make test       # offline deterministic pytest suite (no .env, no network; 560+ tests — see FACTS.md)
 make demo       # end-to-end pipeline over both demo cases (MockLLM, no network)
 make eval       # offline evaluation harness (Recall@K, grounding rate, routing accuracy, calibration)
 make demo-live  # gated live Claude draft (requires ANTHROPIC_API_KEY; no external send)

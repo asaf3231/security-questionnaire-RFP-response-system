@@ -24,6 +24,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from app.config import MAX_REFINED_QUERY_CHARS
+
 if TYPE_CHECKING:  # avoid a runtime import cycle with app/llm.py (which imports this util)
     from app.llm import LLMProvider
 
@@ -32,32 +34,54 @@ if TYPE_CHECKING:  # avoid a runtime import cycle with app/llm.py (which imports
 # Deterministic <thinking> strip harness (named patterns — no magic literals inline)
 # ---------------------------------------------------------------------------
 
-# Well-formed block: <thinking> ... </thinking> (multiline, case-insensitive). The close
-# tag is matched tolerantly (`</thinking[^>]*>`) so a malformed close like `</thinking foo>`
-# still closes the block — otherwise the open-to-end fallback would delete the real answer.
-_THINKING_BLOCK_RE = re.compile(r"<thinking\b[^>]*>.*?</thinking\b[^>]*>", re.DOTALL | re.IGNORECASE)
-# Dangling open tag with NO close at all: strip from the open tag to end of text (tolerant).
-_THINKING_OPEN_TO_END_RE = re.compile(r"<thinking\b[^>]*>.*$", re.DOTALL | re.IGNORECASE)
-# Any stray opening/closing thinking tag left over (with or without attributes).
-_STRAY_THINKING_TAG_RE = re.compile(r"</?thinking\b[^>]*>", re.IGNORECASE)
-
-# Upper bound on a refined query so a runaway model response cannot blow up retrieval.
-_MAX_REFINED_QUERY_CHARS = 512
+# A single opening OR closing <thinking> tag (with or without attributes; tolerant of a
+# malformed close like `</thinking foo>`). group(1) == "/" marks a close tag. The strip is
+# a DEPTH-AWARE scan over these tags rather than a non-greedy regex, so it correctly
+# distinguishes SEPARATE blocks (keep the content between them) from NESTED blocks (drop the
+# whole outer block) — a non-greedy `.*?` leaked the outer block's tail on nested tags.
+_THINKING_TAG_RE = re.compile(r"<(/?)thinking\b[^>]*>", re.IGNORECASE)
 
 
 def strip_thinking_block(text: str) -> str:
     """Remove <thinking>...</thinking> reasoning from `text`, returning the clean remainder.
 
-    Deterministic and total: handles well-formed blocks, a dangling unclosed <thinking>
-    (everything from the open tag to end is dropped → safe), and any stray tags. Returns
-    the stripped remainder; an empty string if nothing usable remains (callers fall back).
+    Deterministic and total. Depth-aware so it handles every shape:
+      - well-formed blocks (single or multiple — content BETWEEN separate blocks is kept);
+      - NESTED blocks (`<thinking>a<thinking>b</thinking>c</thinking>` → the whole outer
+        block, including `c`, is dropped — fixes the prior non-greedy leak);
+      - a dangling unclosed <thinking> (everything from the outermost open tag to end is
+        dropped → safe);
+      - stray closing tags with no open (the tag is removed, surrounding text kept).
+    Returns the stripped remainder; an empty string if nothing usable remains (callers
+    fall back to the original question).
     """
     if not text:
         return ""
-    cleaned = _THINKING_BLOCK_RE.sub(" ", text)
-    cleaned = _THINKING_OPEN_TO_END_RE.sub(" ", cleaned)
-    cleaned = _STRAY_THINKING_TAG_RE.sub(" ", cleaned)
-    return cleaned.strip()
+    kept: list[str] = []
+    depth = 0
+    last = 0  # start of the next run of text to keep
+    for m in _THINKING_TAG_RE.finditer(text):
+        is_close = m.group(1) == "/"
+        if not is_close:
+            if depth == 0:
+                kept.append(text[last:m.start()])  # text before the outermost open tag
+            depth += 1
+        else:
+            if depth > 0:
+                depth -= 1
+                if depth == 0:
+                    last = m.end()  # resume keeping text after the outermost close tag
+            else:
+                kept.append(text[last:m.start()])  # stray close: drop the tag, keep text
+                last = m.end()
+    if depth == 0:
+        kept.append(text[last:])  # trailing text after the last balanced close (or no tags)
+    # depth > 0 ⇒ dangling open: everything from the outermost open onward is already dropped.
+    # Join with a single space so each removed region acts as a token boundary (matches the
+    # prior regex's " " substitution) — otherwise `AES<thinking>r</thinking>TLS` would fuse to
+    # `AESTLS`. Internal whitespace/newlines in each kept run are preserved (only ONE space is
+    # inserted per removed span), so the defensive strip on a multi-line draft answer is safe.
+    return " ".join(kept).strip()
 
 
 # ---------------------------------------------------------------------------
@@ -105,7 +129,7 @@ def refine_query(question: str, *, provider: "LLMProvider") -> str:
     if not cleaned or not any(ch.isalnum() for ch in cleaned):
         return question
 
-    if len(cleaned) > _MAX_REFINED_QUERY_CHARS:
-        cleaned = cleaned[:_MAX_REFINED_QUERY_CHARS].strip()
+    if len(cleaned) > MAX_REFINED_QUERY_CHARS:
+        cleaned = cleaned[:MAX_REFINED_QUERY_CHARS].strip()
 
     return cleaned

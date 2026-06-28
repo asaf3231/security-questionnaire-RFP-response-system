@@ -268,3 +268,33 @@ log; reconcile (rename one to Stage 11). Then commit on `redteam/crazy-testing` 
 record the FACTS row commit sha. Optional: measure live retrieval/grounding delta via scripts/run_live_suite.py.
 Watch out for / open: graded-contract change ⇒ needs Asaf's explicit nod before commit; the in-`<thinking>`
 sensitivity self-check is defense-in-depth ONLY (code chokepoints remain enforcement, CLAUDE.md §5).
+
+## 2026-06-27 23:10 — [BACKEND] SESSION START (fresh PM; reconcile @ Stage-10/red-team boundary)
+Picking up: branch `redteam/crazy-testing`, **HEAD `7612e8a`** (STATE.md said `fe453f4` — stale by one
+ledger-chore commit that stamped the Stage-10 sha + corrected the suite count; benign drift). Stages 0–8
+✅ committed; Stage 10 (Intelligent Query Refinement) implemented + committed; red-team suite layer added.
+State as read (RE-VERIFIED, not trusted): `make test` re-run live → **565 pass / 1 skip / 2 xfail** (exit 0,
+matches FACTS row). Naming collision resolved: `tests/test_stage10_expansion.py` does NOT exist → the "KB &
+Coverage Expansion" Stage-10 SESSION START (21:30) was a plan that got SUPERSEDED by the Query-Refinement
+pivot; the KB-expansion mission ("build the KB, safety-first/credibility") remains UNDONE. The 2 xfails =
+documented lexical-grounding findings in `tests/test_redteam.py` (at-rest vs in-transit; off-topic incidental
+overlap). DISCREPANCY: PLAN.md Stage-10 = 🟡 "Awaiting verification" but STATE.md claims "✅ + Asaf signed
+off" — no PM_LOG entry records that sign-off → treating as UNCONFIRMED, will confirm with Asaf (not assume).
+Plan for this session: report reconciled status to Asaf + surface the open decisions; await instructions.
+No code/contract changes until Asaf directs.
+
+## 2026-06-28 00:26 — [BACKEND] SESSION START ("Close all loose edges" — full reconciliation + cleanup)
+Picking up: branch `redteam/crazy-testing`, **HEAD `7612e8a`**. Asaf provided a third-party "Cleaner's
+Critical Review"; PM independently reconciled it vs `git` + a live `make test`. **CONFIRMED the report +
+found one thing it missed: the working tree is RED.** `make test` → **1 failed / 564 passed / 1 skip /
+2 xfail** — an UNCOMMITTED `app/llm.py` edit removed the `<thinking>` draft directive (breaking the locked
+test `test_build_prompt_includes_thinking_directive`). This is intentional: Asaf's live runs show `<thinking>`
+tanks grounding (LIVE_RUN_FINDINGS.stage10 25/100 grounded WITH vs .nothinking 40/50 WITHOUT).
+Asaf decisions (this session): (1) **keep the `<thinking>` removal**, retire the 2 draft-COT graded tests via
+two-key; (2) **legitimize Stage 10 retroactively** (brief+handback+/code-review+sign-off+doc reconcile);
+(3) **also author the Stage 9 deliverables**.
+Plan for this session (approved plan `~/.claude/plans/graceful-knitting-glacier.md`): Phase A green-honestly
+(two-key COT retirement + pre-edit re-run) → Phase B code nits (nested-tag regex fix, magic#→config, audit
+to_state, unused imports) → Phase C Stage-10 legitimization → Phase D doc truth-up → Phase E Stage 9 brief+
+appendix → Phase F verify+commit+handoff. Governance: tests/+fixtures/ add-only; ALLOW_GRADED_EDIT set only
+for the one authorized COT-retirement run; pre-edit re-run confirms code changed (not test weakened).

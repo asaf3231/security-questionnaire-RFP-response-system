@@ -167,6 +167,7 @@ reindeer-rfp-agent/                      # repo root
 │   ├── schema.py            # Pydantic models: QuestionnaireItem, RetrievedChunk, ContextStack, DraftAnswer, Citation, ConfidenceResult, RoutingDecision, AuditEvent, ResponseDoc
 │   ├── kb.py                # KB loader + validation; atomic chunk = one approved answer / one doc paragraph
 │   ├── retrieval.py         # deterministic lexical retrieval via rank_bm25 + sensitivity/topic tag filter; Recall@K
+│   ├── query_optimizer.py   # (Stage 10) QUERY_REFINEMENT before retrieve: refine_query + depth-aware strip_thinking_block (live-lane only; MockLLM identity ⇒ offline byte-identical)
 │   ├── context_stack.py     # the 4-layer "backpack" assembler (Instruction / Retrieval / Constraint / State)
 │   ├── llm.py               # LLM adapter: MockLLM (offline, seeded) + ClaudeLLM (lazy, gated live lane)
 │   ├── draft.py             # prompt/tool-call pattern; draft_answer + grounding_check (RULE_GROUNDED_ONLY)
@@ -417,6 +418,10 @@ AMBIGUITY_SCORE_MARGIN      = 0.10      # top1−top2 BM25-score gap below this 
 DRAFT_MODEL                 = "claude-sonnet-4-6"   # pin exact at Stage 1 (OQ-1); opus-4-8 swappable (graded contract)
 MAX_OUTPUT_TOKENS           = 1024
 DRAFT_TEMPERATURE           = 0.0       # determinism in the live lane
+
+# --- query refinement (Stage 10; LIVE lane only — offline MockLLM uses the identity default) ---
+REFINE_MAX_TOKENS           = 256       # bound the live QUERY_REFINEMENT call (a refined query is short)
+MAX_REFINED_QUERY_CHARS     = 512       # cap a refined query so a runaway model response can't blow up retrieval
 
 # --- determinism ---
 RANDOM_SEED                 = 42        # seeds MockLLM + any sampling; the offline suite is reproducible

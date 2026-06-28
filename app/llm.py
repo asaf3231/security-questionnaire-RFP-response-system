@@ -26,6 +26,7 @@ from app.config import (
     DRAFT_MODEL,
     DRAFT_TEMPERATURE,
     MAX_OUTPUT_TOKENS,
+    REFINE_MAX_TOKENS,
     UNGROUNDED_PLACEHOLDER,
 )
 from app.query_optimizer import strip_thinking_block
@@ -53,22 +54,15 @@ _REFINE_DIRECTIVE: str = (
     "<thinking>Concept: encryption at rest/transit. Synonyms: AES-256, TLS, SSL, KMS.</thinking> "
     "encryption AES TLS rest transit"
 )
-_REFINE_MAX_TOKENS: int = 256  # a refined query is short; bound the refinement call
+# Bounds for the live QUERY_REFINEMENT call live in app/config.py §9 (REFINE_MAX_TOKENS).
 
-# DRAFT reasoning directive: map chunks → points, self-check sensitivity + contradictions,
-# then write the cited answer AFTER the thinking block (which the code strips).
-_DRAFT_THINKING_DIRECTIVE: str = (
-    "Before writing the answer, reason inside <thinking>...</thinking> covering:\n"
-    "(a) context mapping: which retrieved [chunk_id] chunks support which points of your answer;\n"
-    "(b) constraint check (RULE_SENSITIVITY_GATE): note any chunk marked internal/restricted that "
-    "must not be asserted without human review;\n"
-    "(c) contradiction check: note any conflict between the retrieved chunks.\n"
-    "Then, AFTER the closing </thinking> tag, write the professional response and cite every chunk "
-    "you use with its [chunk_id] marker (cite at least one). Do NOT repeat the thinking.\n"
-    "Example:\n"
-    "<thinking>kb-001 confirms AES-256 at rest; kb-014 SOC2 Type II; no conflicts.</thinking> "
-    "We encrypt customer data at rest with AES-256 [kb-001] and maintain SOC2 Type II compliance [kb-014]."
-)
+# NOTE (2026-06-28, two-key authorized spec change): the DRAFT prompt no longer injects a
+# <thinking> reasoning scaffold. Live evidence (redteam/LIVE_RUN_FINDINGS.nothinking 40/50
+# grounded vs .stage10 25/100 WITH the scaffold) showed it makes the model emit reasoning
+# prose and drop inline [chunk_id] citations, tanking live grounding. The draft now requests
+# inline citations + answer-only output (see ClaudeLLM._build_prompt). The DEFENSIVE strip in
+# ClaudeLLM.draft (strip_thinking_block) remains — the model may still emit reasoning unasked.
+# The refine-query <thinking> scaffold (_REFINE_DIRECTIVE above) is unaffected and retained.
 
 
 # ---------------------------------------------------------------------------
@@ -233,10 +227,11 @@ class ClaudeLLM(LLMProvider):
             f"=== CONSTRAINTS ===\n{context_stack.constraint}\n\n"
             f"=== STATE ===\n{context_stack.state}\n\n"
             "=== TASK ===\n"
-            f"{_DRAFT_THINKING_DIRECTIVE}\n"
             "Draft a grounded answer to the QUESTION above using ONLY the Retrieval Context. "
-            "Cite every chunk you draw from using its [chunk_id] marker exactly as shown. "
-            "If the retrieved evidence is insufficient, say so clearly rather than speculating."
+            "Cite every chunk you draw from using its [chunk_id] marker INLINE in the answer "
+            "(each claim immediately followed by its [chunk_id]). "
+            "If the retrieved evidence is insufficient, say so clearly rather than speculating. "
+            "Return ONLY the answer — no preamble, no reasoning section."
         )
 
     def refine_query(self, question: str) -> str:
@@ -253,7 +248,7 @@ class ClaudeLLM(LLMProvider):
             prompt = f"{_REFINE_DIRECTIVE}\n\nQuestion: {question}"
             response = client.messages.create(
                 model=DRAFT_MODEL,
-                max_tokens=_REFINE_MAX_TOKENS,
+                max_tokens=REFINE_MAX_TOKENS,
                 temperature=DRAFT_TEMPERATURE,
                 messages=[{"role": "user", "content": prompt}],
             )

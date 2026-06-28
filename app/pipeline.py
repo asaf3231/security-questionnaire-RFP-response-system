@@ -48,7 +48,6 @@ from app.retrieval import Retriever
 from app.routing import route_for_review
 from app.confidence import score_confidence
 from app.schema import (
-    Citation,
     ResponseDoc,
     ResponseDocItem,
     RoutingDecision,
@@ -180,6 +179,7 @@ def run_pipeline(
                     item_id=item_id,
                     event="tool_call",
                     from_state=current_state,
+                    to_state=current_state,  # refinement does not change item state
                     rule=RULE_AUDIT_COMPLETE,
                     detail={
                         "tool": "refine_query",

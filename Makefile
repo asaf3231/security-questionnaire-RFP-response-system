@@ -7,6 +7,8 @@
 #   test       — run the offline deterministic pytest suite (no .env, no network)
 #   demo       — mocked end-to-end pipeline (MockLLM, no network)
 #   demo-live  — gated live Claude draft (requires ANTHROPIC_API_KEY; still no external send)
+#   chat       — interactive terminal REPL, offline MockLLM (type a question, watch the pipeline)
+#   chat-live  — interactive REPL on the live Claude lane (requires ANTHROPIC_API_KEY)
 #   eval       — offline deterministic evaluation harness (computed metrics; no network)
 #
 # Governance: `test` and `eval` depend on `integrity`, which aborts (non-zero) if the
@@ -17,7 +19,7 @@
 # If .venv is missing, a clear bootstrap message is printed and the target exits non-zero.
 # NEVER silently falls back to system python (that caused rank_bm25 import failures).
 
-.PHONY: install integrity test demo demo-live eval
+.PHONY: install integrity test demo demo-live chat chat-live eval
 
 PY     := .venv/bin/python
 PYTEST := .venv/bin/pytest
@@ -50,6 +52,14 @@ demo:
 demo-live:
 	$(call check_venv)
 	$(PY) scripts/run_live_draft.py
+
+chat:
+	$(call check_venv)
+	$(PY) scripts/run_chat.py
+
+chat-live:
+	$(call check_venv)
+	$(PY) scripts/run_chat.py --live
 
 eval: integrity
 	$(call check_venv)

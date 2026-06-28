@@ -33,7 +33,6 @@ from app.llm import (
     ClaudeLLM,
     LLMProvider,
     MockLLM,
-    _DRAFT_THINKING_DIRECTIVE,
     _REFINE_DIRECTIVE,
 )
 from app.pipeline import run_pipeline
@@ -135,6 +134,37 @@ class TestStripThinkingBlock:
     def test_empty_input(self):
         assert strip_thinking_block("") == ""
 
+    # --- ADDED 2026-06-28: nested-tag regression (the prior non-greedy regex leaked the
+    # outer block's tail; the depth-aware scan must drop the WHOLE outer block) ---
+    def test_nested_blocks_outer_fully_removed(self):
+        out = strip_thinking_block("<thinking>a<thinking>b</thinking>c</thinking> answer")
+        assert out == "answer"
+
+    def test_nested_blocks_no_tail_leak(self):
+        # The reported leak: inner close ended the non-greedy match early, leaking `c`/`d`.
+        out = strip_thinking_block("<thinking>a<thinking>b</thinking> c</thinking>d")
+        assert "<thinking>" not in out and "b" not in out and "c" not in out
+        assert out == "d"
+
+    def test_nested_keeps_content_between_separate_blocks(self):
+        # Nesting must NOT regress the separate-blocks behavior (content between is kept).
+        out = strip_thinking_block(
+            "<thinking>x<thinking>y</thinking>z</thinking> keep1 <thinking>q</thinking> keep2"
+        )
+        assert "<thinking>" not in out and "keep1" in out and "keep2" in out
+        assert "y" not in out and "z" not in out
+
+    def test_stray_close_tag_keeps_surrounding_text(self):
+        out = strip_thinking_block("encryption</thinking> keys")
+        assert "</thinking>" not in out and "encryption" in out and "keys" in out
+
+    def test_tag_with_no_surrounding_whitespace_does_not_fuse_tokens(self):
+        # REGRESSION (code-review 2026-06-28): a removed block/tag between two words with NO
+        # surrounding whitespace must act as a token boundary, else BM25 gets a fused garbage
+        # token. `AES<thinking>r</thinking>TLS` must become `AES TLS`, not `AESTLS`.
+        assert strip_thinking_block("AES<thinking>r</thinking>TLS") == "AES TLS"
+        assert strip_thinking_block("AES</thinking>TLS") == "AES TLS"
+
 
 # ---------------------------------------------------------------------------
 # QREF2 — refine_query: offline identity + safe fallbacks
@@ -189,10 +219,17 @@ class TestContextStackQuestion:
         prompt = ClaudeLLM()._build_prompt(_stack_for(item))
         assert item.question in prompt
 
-    def test_build_prompt_includes_thinking_directive(self):
+    def test_build_prompt_requests_inline_citations_answer_only(self):
+        # SPEC CHANGE (two-key authorized 2026-06-28, Asaf): the draft prompt NO LONGER
+        # injects a <thinking> reasoning scaffold. Live evidence (redteam/LIVE_RUN_FINDINGS
+        # .nothinking 40/50 grounded vs .stage10 25/100 WITH the scaffold) shows the scaffold
+        # makes the model emit reasoning prose and drop inline [chunk_id] citations, tanking
+        # live grounding. The draft now requests inline citations + answer-only output.
+        # (Superseded test: test_build_prompt_includes_thinking_directive.)
         prompt = ClaudeLLM()._build_prompt(_stack_for(_first_item()))
-        assert "<thinking>" in prompt
-        assert "RULE_SENSITIVITY_GATE" in prompt
+        assert "<thinking>" not in prompt
+        assert "[chunk_id]" in prompt
+        assert "ONLY the answer" in prompt
 
     def test_context_stack_backward_compatible_default(self):
         """A pre-Stage-10 construction without question still validates (default '')."""
@@ -278,9 +315,8 @@ class TestPromptScaffoldConstants:
         assert "optimized search query" in _REFINE_DIRECTIVE
         assert "synonyms" in _REFINE_DIRECTIVE
 
-    def test_draft_directive_has_three_checks(self):
-        d = _DRAFT_THINKING_DIRECTIVE
-        assert "<thinking>" in d
-        assert "context mapping" in d
-        assert "RULE_SENSITIVITY_GATE" in d
-        assert "contradiction" in d
+    # RETIRED (two-key authorized 2026-06-28, Asaf): test_draft_directive_has_three_checks.
+    # The _DRAFT_THINKING_DIRECTIVE constant was removed from app/llm.py (the draft no longer
+    # uses a <thinking> scaffold — see the SPEC CHANGE note in TestContextStackQuestion). The
+    # refine-query <thinking> path (above) and the DEFENSIVE strip in ClaudeLLM.draft
+    # (TestDraftThinkingStrip) remain — the model may still emit reasoning even when not asked.
