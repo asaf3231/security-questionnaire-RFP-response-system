@@ -2,7 +2,10 @@
 scripts/run_questionnaire.py — run any questionnaire through the pipeline and write a report file.
 
 Usage:
-  python scripts/run_questionnaire.py [QUESTIONNAIRE_PATH] [--live] [--out FILE]
+  python scripts/run_questionnaire.py [QUESTIONNAIRE_PATH] [--live] [--out FILE] [--response]
+
+  --response  also write the send-ready response document `exports/<qid>.response.md`
+              (clean Q->A, sources by doc name, approved-only; a human reviews + sends it).
 
 Defaults:
   path : data/questionnaires/case_bulk20.synthetic.json
@@ -31,6 +34,7 @@ if str(_REPO_ROOT) not in sys.path:
 def main() -> None:
     argv = sys.argv[1:]
     live = "--live" in argv
+    want_response = "--response" in argv  # also write the send-ready response document
 
     out_arg: str | None = None
     skip_idx: set[int] = set()
@@ -77,7 +81,8 @@ def main() -> None:
     if audit_log.exists():
         audit_log.unlink()
 
-    retriever = Retriever(load_kb())
+    kb = load_kb()
+    retriever = Retriever(kb)
     policy_tags = load_policy_tags()
 
     print(f"Running {q_path.name}  ·  lane={lane}  ·  {len(questionnaire['items'])} items …")
@@ -151,6 +156,44 @@ def main() -> None:
     )
     print(f"Report written: {out_path}")
     print(f"Audit log     : {audit_log}")
+
+    # --response: simulate the employee's human-approval of confident, grounded, non-sensitive
+    # items (actor="human" — the agent NEVER self-approves), then write the send-ready response
+    # document. Routed/ungrounded/sensitive items stay unapproved → "under internal review".
+    if want_response:
+        from app.export import export_response_document
+        from app.schema import ResponseDoc
+        from app.state import transition
+
+        source_by_chunk = {c.chunk_id: c.source for c in kb if c.source}
+        approved_n = 0
+        review_items = []
+        for it in result.response_doc.items:
+            r = result.routing.get(it.item_id)
+            is_routed = bool(r and r.should_route)
+            is_sensitive = bool(set(it.sensitivities) & {"internal", "restricted"})
+            is_ungrounded = it.draft_text == UNGROUNDED_PLACEHOLDER
+            if it.status == "SCORED" and not is_routed and not is_sensitive and not is_ungrounded:
+                new_status = transition(it.status, "APPROVED", actor="human")
+                review_items.append(it.model_copy(update={"status": new_status, "review_approved": True}))
+                approved_n += 1
+            else:
+                review_items.append(it)
+
+        response_doc = ResponseDoc(
+            questionnaire_id=qid,
+            generated_at=result.response_doc.generated_at,
+            items=review_items,
+        )
+        rpath = export_response_document(
+            response_doc, source_by_chunk,
+            out_dir=_REPO_ROOT / "exports", log_path=audit_log,
+        )
+        pending_n = len(review_items) - approved_n
+        print(
+            f"Response document: {rpath}  "
+            f"({approved_n} approved + sent-ready · {pending_n} pending internal review)"
+        )
 
 
 if __name__ == "__main__":

@@ -252,15 +252,18 @@ class ClaudeLLM(LLMProvider):
             "=== TASK ===\n"
             "Draft a grounded answer to the QUESTION above using ONLY the Retrieval Context.\n"
             "\n"
-            "CITATION FORMAT (mandatory): every sentence that states a fact MUST end with the "
-            "[chunk_id] it is drawn from. An answer containing zero [chunk_id] markers is INVALID "
-            "and will be rejected.\n"
+            "CITATION FORMAT (mandatory):\n"
+            "1. Cite inline: every sentence that states a fact ends with the [chunk_id] it is drawn from.\n"
+            "2. ALWAYS end your answer with a final line listing every chunk you used, e.g.\n"
+            "     Sources: [kb-001], [kb-008]\n"
+            "An answer containing zero [chunk_id] markers is INVALID and will be rejected.\n"
             "Example of the required format (illustration only — do not reuse this content):\n"
             "  Yes, data is encrypted at rest using AES-256 [kb-001]. Keys are rotated quarterly "
             "[kb-001], and all access is logged [kb-008].\n"
+            "  Sources: [kb-001], [kb-008]\n"
             "\n"
             "If the Retrieval Context does not address the QUESTION, say so plainly and do NOT "
-            "invent a [chunk_id]. Return ONLY the answer — no preamble, no reasoning section."
+            "invent a [chunk_id] or a Sources line. Return ONLY the answer — no preamble, no reasoning section."
         )
 
     def refine_query(self, question: str) -> str:

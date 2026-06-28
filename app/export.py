@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from pathlib import Path
 
 from app.audit import new_audit_event, write_audit
@@ -144,6 +145,66 @@ def render_preview(doc: ResponseDoc) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Response document — the clean, send-ready answer doc the employee reviews
+# (internal tool: an employee assembles this, a human approves it, a human sends it).
+# ---------------------------------------------------------------------------
+
+# A "[chunk_id]" marker together with any single leading space (so "AES-256 [kb-001]." → "AES-256.").
+_CITATION_MARKER_RE = re.compile(r" ?\[[^\]]+\]")
+# A trailing "Sources: ..." line the live draft prompt asks the model to emit (any case).
+_SOURCES_LINE_RE = re.compile(r"(?im)^[ \t]*sources?[ \t]*:.*$")
+
+
+def _clean_answer_text(text: str) -> str:
+    """Strip internal [chunk_id] markers and any 'Sources:' line for the send-ready doc."""
+    text = _SOURCES_LINE_RE.sub("", text)
+    text = _CITATION_MARKER_RE.sub("", text)
+    return "\n".join(line.rstrip() for line in text.splitlines()).strip()
+
+
+def _sources_for(item: ResponseDocItem, source_by_chunk: dict[str, str]) -> list[str]:
+    """Human-readable source doc names for an item's cited chunks (unique, order-preserving)."""
+    names: list[str] = []
+    for c in item.citations:
+        src = source_by_chunk.get(c.chunk_id)
+        if src and src not in names:
+            names.append(src)
+    return names
+
+
+def render_response_document(doc: ResponseDoc, source_by_chunk: dict[str, str]) -> str:
+    """Render the send-ready response document: clean Q -> A, no internal machinery.
+
+    APPROVED items show the answer (citations stripped) + a human-readable "Source:" line.
+    Any not-yet-approved item shows "Answer under internal review — to follow." (no answer
+    text, no routing/queue/confidence leaked). If ANY item is unapproved, the byte-exact
+    REVIEW_BANNER is the first line (this draft is not cleared for release).
+    """
+    has_unapproved = any(item.status != "APPROVED" for item in doc.items)
+    lines: list[str] = []
+    if has_unapproved:
+        lines.append(REVIEW_BANNER)
+        lines.append("")
+    lines.append(f"# Security Questionnaire Response — {doc.questionnaire_id}")
+    lines.append("")
+    for idx, item in enumerate(doc.items, start=1):
+        lines.append(f"## {idx}. {item.question}")
+        lines.append("")
+        if item.status == "APPROVED":
+            lines.append(_clean_answer_text(item.draft_text))
+            sources = _sources_for(item, source_by_chunk)
+            if sources:
+                lines.append("")
+                lines.append(f"_Source: {', '.join(sources)}_")
+        else:
+            lines.append("_Answer under internal review — to follow._")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Export entry point — the RULE_NO_EXTERNAL_SEND + RULE_SENSITIVITY_GATE chokepoint
 # ---------------------------------------------------------------------------
 
@@ -244,3 +305,44 @@ def export_response(
     )
 
     return {"markdown": md_path, "csv": csv_path}
+
+
+def export_response_document(
+    doc: ResponseDoc,
+    source_by_chunk: dict[str, str],
+    *,
+    out_dir: Path | None = None,
+    log_path: Path | None = None,
+) -> Path:
+    """Write the send-ready response document to local disk and audit it.
+
+    BOUND1 / RULE_NO_EXTERNAL_SEND: writes `<qid>.response.md` to local disk only and emits
+    an affirmative audit event (rule=RULE_NO_EXTERNAL_SEND) — the system never sends; a human
+    reviews the doc and sends it. Only APPROVED items carry an answer (render_response_document);
+    not-yet-approved items render as "under internal review", so the human-approval gate holds.
+    """
+    if out_dir is None:
+        out_dir = _DEFAULT_EXPORT_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    path = out_dir / f"{doc.questionnaire_id}.response.md"
+    path.write_text(render_response_document(doc, source_by_chunk), encoding="utf-8")
+
+    approved = sum(1 for item in doc.items if item.status == "APPROVED")
+    write_audit(
+        new_audit_event(
+            questionnaire_id=doc.questionnaire_id,
+            item_id="*",
+            event="export_response_document",
+            rule=RULE_NO_EXTERNAL_SEND,
+            detail={
+                "reason": EXTERNAL_SEND_BLOCKED,
+                "destination": "local_disk",
+                "path": str(path),
+                "approved_items": approved,
+                "total_items": len(doc.items),
+            },
+        ),
+        log_path=log_path,
+    )
+    return path
