@@ -323,3 +323,15 @@ the COT-test retirement are the graded-contract changes Asaf authorized this ses
 Picking up: **all planned stages 0–10 ✅ complete** (per STATE.md, HEAD was 45c0dc6). Onboarded fresh PM: read PM_Methodology_Prompt.md + STATE.md, reconciled vs git.
 State as read (to re-verify): STATE.md stale by 2 ledger commits — live HEAD is **ae080a8 ("cleaner")** on branch `redteam/crazy-testing` (45c0dc6 → 0be05fc stamp → ae080a8). Uncommitted: `redteam/LIVE_RUN_FINDINGS.md` modified (−87/+14, a trim), `scripts/run_live_review.py` untracked (380-line live-review helper). Suite last recorded 569 pass / 1 skip / 2 xfail (FACTS = source of truth; not re-run yet this session).
 Plan for this session: await Asaf direction. First task from Asaf: assess whether the system can take a **PDF questionnaire** as input.
+
+## 2026-06-28 14:30 — [BACKEND] SESSION END / HANDOFF
+Did: a sequence of Asaf-directed REPL/live-lane + intake improvements, all PM-verified, **committed `bb1058d`** (code) + this ledger update:
+(1) **auto-tagging at intake** (`infer_tags` — deterministic, valid-vocab; chosen minimal, NOT an LLM tagger to avoid a `LLMProvider`-interface graded change; infers only when an item arrives untagged ⇒ demo cases byte-stable);
+(2) **REPL UX** — removed the manual tag prompt, per-step pipeline trace read from the audit tail, `readline` history, gated `COMET_SHOW_PROMPTS` showing each Claude request prompt+response;
+(3) **draft-prompt few-shot + structural enforcement** (two-key authorized — Asaf go-ahead) — live grounding 10/20→14/20 on case_bulk20 (residual 4 covered drop `[chunk_id]`; live variance);
+(4) new `scripts/run_questionnaire.py` (offline/`--live` → report file);
+(5) `case_bulk20` i20 fixed to a genuine ungrounded negative (security-training → BC/DR) but kept gitignored/local.
+Suite **588** via `make test` (= 580 + 8 add-only; integrity gate clean, no override). `make demo`/`make eval` byte-unchanged. `/code-review` (1 reviewer) → 1 LOW finding (run_questionnaire `--out` parse) fixed; else clean.
+Status now: ✅ committed `bb1058d` — **LOCAL, NOT pushed** (origin still at `3e6b363`).
+Next PM should: await Asaf direction. **Open (Asaf's calls, unchanged):** PR-3 `N` + PR-4 band pin; history-scrub of Reference/ home-path; merge `redteam/crazy-testing`→main; whether to **push `bb1058d`**; whether to track `case_bulk20`.
+Watch out for / open: **`brief/REINDEER_BRIEF.md` has Asaf's UNCOMMITTED §3 business-narrative work — do NOT bundle it.** Residual live-grounding: 4 covered items still emit `cit=0` (Anthropic native citations API = the robust next lever, larger change). Local live lane on old `anthropic` 0.40.0 (py3.10); the pinned env needs py3.12.

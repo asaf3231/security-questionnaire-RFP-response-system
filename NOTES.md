@@ -479,3 +479,20 @@ Determinism guardrail HOLDS for PR-1/PR-2 as pinned (eval-006 + all routed gold 
   i3 as the in-set routing example.
 - **Documented (not a defect):** ambiguity trigger uses an absolute BM25 gap vs `AMBIGUITY_SCORE_MARGIN`;
   fine for this corpus (real gaps ~6), but a normalized gap would be more robust at scale (Q&A point).
+
+## 2026-06-28 — [BACKEND] Auto-tag + REPL/live-lane improvements (committed `bb1058d`)
+Pointer (payload = the commit + the FACTS auto-tag / live-grounding rows); PM-verified, suite 588 green:
+- **Auto-tagging at intake** — `infer_tags` (app/pipeline.py) infers `topic_tags` for an UNTAGGED item
+  from its retrieved chunks (deterministic, valid-vocab only), threaded into routing. `AUTO_TAG_MAX`=3.
+  Decision (Asaf): minimal/deterministic, NOT an LLM tagger (avoids a `LLMProvider`-interface graded
+  change); infer only when an item arrives untagged ⇒ the two demo cases stay byte-stable.
+- **Draft-prompt few-shot + structural enforcement** (app/llm.py `_build_prompt` TASK) — two-key
+  authorized (Asaf go-ahead): a mandatory inline-`[chunk_id]` rule + a one-shot example. Live lift
+  10/20→14/20 grounded; residual 4 covered items still drop markers (`cit=0`); live-lane variance noted.
+- **REPL UX** (scripts/run_chat.py) — removed the manual tag prompt (auto-inferred now); per-step
+  pipeline trace read from the audit tail; `readline` history; gated `COMET_SHOW_PROMPTS` prints each
+  Claude request prompt+response in the live lane.
+- **New runner** `scripts/run_questionnaire.py` — runs any questionnaire (offline / `--live`) → report file.
+- **case_bulk20 i20** swapped (security-training → business-continuity/DR) so it is a genuine ungrounded
+  negative; the file stays **gitignored/local** per Asaf's submission-cleanup decision (NOT committed).
+- `/code-review`: 1 LOW finding (run_questionnaire `--out` arg-parse edge) found + fixed; else clean.
