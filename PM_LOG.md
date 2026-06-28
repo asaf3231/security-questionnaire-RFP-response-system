@@ -298,3 +298,23 @@ Plan for this session (approved plan `~/.claude/plans/graceful-knitting-glacier.
 to_state, unused imports) → Phase C Stage-10 legitimization → Phase D doc truth-up → Phase E Stage 9 brief+
 appendix → Phase F verify+commit+handoff. Governance: tests/+fixtures/ add-only; ALLOW_GRADED_EDIT set only
 for the one authorized COT-retirement run; pre-edit re-run confirms code changed (not test weakened).
+
+## 2026-06-28 01:10 — [BACKEND] SESSION END / HANDOFF ("Close all loose edges" COMPLETE)
+Did: executed the full approved plan. **Phase A** — kept the draft `<thinking>` removal; two-key retired 2
+draft-COT tests (key 2 = pre-edit re-run at `7612e8a` proving the *prompt* changed, not the test); removed
+the dead `_DRAFT_THINKING_DIRECTIVE`. **Phase B** — rewrote `strip_thinking_block` as a depth-aware scan
+(fixes the nested-tag leak); magic numbers → `config.py` §9; `refine_query` audit `to_state`; dropped 3
+unused imports; **handled a CONCURRENT mutation** — a NEW untracked `scripts/run_chat.py` appeared mid-session
+and broke ENV2 (argparse); Asaf chose "fix stdlib-only" → done. **Phase C** — authored `briefs/stage-10.md` +
+`handbacks/stage-10.md`; ran `/code-review` (2 finder agents) → 1 real finding (token-fusion in the rewritten
+strip) FIXED + regression test; recorded Asaf sign-off; tombstoned the ghost "Stage 10/11 KB-expansion".
+**Phase D** — reconciled FACTS (demo-score contradiction, superseded 373/1, cleared pending rows),
+PLAN/QA/CLAUDE(§2+§9)/README/NOTES/HANDOFF. **Phase E** — authored `brief/REINDEER_BRIEF.md` +
+`appendix/TECHNICAL_APPENDIX.md`. **Phase F** — verified + committed.
+Status now: ✅ **All planned stages (0–10) complete.** Suite 569/1/2 via `make test` (integrity gate clean
+post-commit, no override); `make eval`/`make demo` unchanged. Committed `45c0dc6`; FACTS sha stamped.
+Next PM should: await Asaf direction. Optional — push a remote for native `/security-review`; decide tracking
+of `crazy_test_prompt.md` (left untracked); brief a fresh KB-expansion stage if commissioned.
+Watch out for / open: live grounding ≪ mock grounding by design (gate forces human review on missing
+citations — characterized in `redteam/LIVE_RUN_FINDINGS*.md`); no `origin` remote. The two §9 constants +
+the COT-test retirement are the graded-contract changes Asaf authorized this session.
