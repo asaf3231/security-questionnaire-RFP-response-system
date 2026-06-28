@@ -40,6 +40,9 @@ DRAFT_TEMPERATURE: float = 0.0            # determinism in the live lane
 REFINE_MAX_TOKENS: int = 256              # a refined query is short; bound the refinement call
 MAX_REFINED_QUERY_CHARS: int = 512        # cap a refined query so a runaway response can't blow up retrieval
 
+# Auto-tagging at intake — infer topic_tags for an UNTAGGED item from its retrieved chunks
+AUTO_TAG_MAX: int = 3                     # max inferred topic_tags (score-weighted; routing/queue input)
+
 # ---------------------------------------------------------------------------
 # Grounding (Stage 3) — RULE_GROUNDED_ONLY
 # ---------------------------------------------------------------------------

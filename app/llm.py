@@ -19,6 +19,7 @@ no data/* read. ClaudeLLM uses config._get_claude() (lazy singleton); MockLLM ha
 
 from __future__ import annotations
 
+import os
 import re
 from abc import ABC, abstractmethod
 
@@ -63,6 +64,14 @@ _REFINE_DIRECTIVE: str = (
 # inline citations + answer-only output (see ClaudeLLM._build_prompt). The DEFENSIVE strip in
 # ClaudeLLM.draft (strip_thinking_block) remains — the model may still emit reasoning unasked.
 # The refine-query <thinking> scaffold (_REFINE_DIRECTIVE above) is unaffected and retained.
+#
+# NOTE (2026-06-28, two-key authorized — Asaf go-ahead): the DRAFT TASK now adds (a) a mandatory
+# CITATION FORMAT rule (every factual sentence MUST end with its [chunk_id]; zero markers ⇒
+# INVALID) and (b) a one-shot worked example of the inline-citation format. Rationale: zero-shot
+# instruction-only citing made the model intermittently drop [chunk_id] markers ⇒ cit=0 ⇒ the
+# grounding gate rejected covered answers. Live evidence on case_bulk20 (18 covered + 2 genuine
+# negatives): grounded 10/20 → 14/20; false-ungrounded on covered items 8 → 4. The 2 negatives
+# (i19 bug-bounty, i20 BC/DR) stay correctly ungrounded. (Live lane has run-to-run variance.)
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +149,20 @@ def _parse_citations(text: str, retrieval_layer: list[str]) -> list[Citation]:
             citations.append(Citation(chunk_id=cid))
             seen.add(cid)
     return citations
+
+
+def _maybe_show(title: str, body: str) -> None:
+    """Print a Claude request prompt or response when COMET_SHOW_PROMPTS is set (REPL live lane).
+
+    Off by default → make demo-live and the offline suite are unaffected. The body holds only
+    synthetic KB content + the question / the model's answer (no secret/PII), so printing is safe.
+    """
+    if not os.environ.get("COMET_SHOW_PROMPTS"):
+        return
+    print(f"\n┌─ {title} ──────────────────────────────")
+    for line in (body.splitlines() or [body]):
+        print(f"│ {line}")
+    print("└───────────────────────────────────────────────────")
 
 
 # ---------------------------------------------------------------------------
@@ -227,11 +250,17 @@ class ClaudeLLM(LLMProvider):
             f"=== CONSTRAINTS ===\n{context_stack.constraint}\n\n"
             f"=== STATE ===\n{context_stack.state}\n\n"
             "=== TASK ===\n"
-            "Draft a grounded answer to the QUESTION above using ONLY the Retrieval Context. "
-            "Cite every chunk you draw from using its [chunk_id] marker INLINE in the answer "
-            "(each claim immediately followed by its [chunk_id]). "
-            "If the retrieved evidence is insufficient, say so clearly rather than speculating. "
-            "Return ONLY the answer — no preamble, no reasoning section."
+            "Draft a grounded answer to the QUESTION above using ONLY the Retrieval Context.\n"
+            "\n"
+            "CITATION FORMAT (mandatory): every sentence that states a fact MUST end with the "
+            "[chunk_id] it is drawn from. An answer containing zero [chunk_id] markers is INVALID "
+            "and will be rejected.\n"
+            "Example of the required format (illustration only — do not reuse this content):\n"
+            "  Yes, data is encrypted at rest using AES-256 [kb-001]. Keys are rotated quarterly "
+            "[kb-001], and all access is logged [kb-008].\n"
+            "\n"
+            "If the Retrieval Context does not address the QUESTION, say so plainly and do NOT "
+            "invent a [chunk_id]. Return ONLY the answer — no preamble, no reasoning section."
         )
 
     def refine_query(self, question: str) -> str:
@@ -246,6 +275,7 @@ class ClaudeLLM(LLMProvider):
             client = _get_claude()
 
             prompt = f"{_REFINE_DIRECTIVE}\n\nQuestion: {question}"
+            _maybe_show("→ Claude request 1 · refine_query (prompt)", prompt)
             response = client.messages.create(
                 model=DRAFT_MODEL,
                 max_tokens=REFINE_MAX_TOKENS,
@@ -259,6 +289,7 @@ class ClaudeLLM(LLMProvider):
                     raw_text += block.text
 
             raw_text = raw_text.strip()
+            _maybe_show("← Claude request 1 · refine_query (response)", raw_text)
             return raw_text if raw_text else question
 
         except Exception:
@@ -277,6 +308,7 @@ class ClaudeLLM(LLMProvider):
             client = _get_claude()
 
             prompt = self._build_prompt(context_stack)
+            _maybe_show("→ Claude request 2 · draft (prompt)", prompt)
 
             response = client.messages.create(
                 model=DRAFT_MODEL,
@@ -292,6 +324,7 @@ class ClaudeLLM(LLMProvider):
                     raw_text += block.text
 
             raw_text = raw_text.strip()
+            _maybe_show("← Claude request 2 · draft (response)", raw_text)
             if not raw_text:
                 return DraftAnswer(text=UNGROUNDED_PLACEHOLDER, citations=[])
 

@@ -34,6 +34,7 @@ from typing import Optional
 
 from app.audit import new_audit_event, write_audit
 from app.config import (
+    AUTO_TAG_MAX,
     ERROR_TERMINAL,
     RULE_AUDIT_COMPLETE,
     RULE_SAFE_TERMINAL,
@@ -78,6 +79,37 @@ class PipelineResult:
     response_doc: ResponseDoc
     routing: dict[str, RoutingDecision] = field(default_factory=dict)
     errors: dict[str, str] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# infer_tags() — auto-tagging at intake (deterministic, reuses retrieved chunks)
+# ---------------------------------------------------------------------------
+
+def infer_tags(chunks: list, policy_tags: dict) -> list[str]:
+    """Infer topic_tags for an untagged item from its already-retrieved chunks.
+
+    A question is "about" what its nearest approved answers are about: tally the
+    retrieved chunks' topic_tags weighted by BM25 score, keep only tags in the valid
+    vocabulary (routing_map keys ∪ high_risk_tags — read from policy_tags, never a
+    hardcoded list), and return the top AUTO_TAG_MAX. Deterministic tie-break (score
+    desc, then tag asc). Empty corpus / no valid tag → [] (the item simply stays
+    untagged; RULE_SAFE_TERMINAL spirit — never raises).
+
+    These inferred tags feed routing/queue resolution only; retrieval is unchanged.
+    """
+    routing_map: dict = policy_tags.get("routing_map", {})
+    high_risk: list = policy_tags.get("high_risk_tags", [])
+    valid: set[str] = set(routing_map.keys()) | set(high_risk)
+
+    weighted: dict[str, float] = {}
+    for chunk in chunks:
+        score = getattr(chunk, "bm25_score", 0.0) or 0.0
+        for tag in (getattr(chunk, "topic_tags", None) or []):
+            if tag in valid:
+                weighted[tag] = weighted.get(tag, 0.0) + score
+
+    ranked = sorted(weighted.items(), key=lambda kv: (-kv[1], kv[0]))
+    return [tag for tag, _ in ranked[:AUTO_TAG_MAX]]
 
 
 # ---------------------------------------------------------------------------
@@ -228,6 +260,30 @@ def run_pipeline(
             )
 
             # ----------------------------------------------------------------
+            # 2b. AUTO-TAG (intake) — infer topic_tags when the item arrived untagged.
+            # Reuses the already-retrieved chunks (no extra retrieval). Inferred tags
+            # drive routing/queue resolution (an inferred legal/security tag fires
+            # ROUTED_HIGH_RISK); an item that arrived WITH tags is respected unchanged.
+            # ----------------------------------------------------------------
+            routing_item = item
+            if not item.topic_tags:
+                inferred_tags = infer_tags(chunks, policy_tags)
+                if inferred_tags:
+                    routing_item = item.model_copy(update={"topic_tags": inferred_tags})
+                write_audit(
+                    new_audit_event(
+                        questionnaire_id=questionnaire_id,
+                        item_id=item_id,
+                        event="tool_call",
+                        from_state=current_state,
+                        to_state=current_state,  # tagging does not change item state
+                        rule=RULE_AUDIT_COMPLETE,
+                        detail={"tool": "auto_tag", "inferred_tags": inferred_tags},
+                    ),
+                    log_path=audit_log_path,
+                )
+
+            # ----------------------------------------------------------------
             # 3. ASSEMBLE CONTEXT + DRAFT + GROUNDING CHECK
             # ----------------------------------------------------------------
             context_stack = assemble_context(
@@ -323,7 +379,7 @@ def run_pipeline(
             # 5. ROUTE FOR REVIEW
             # ----------------------------------------------------------------
             routing_decision = route_for_review(
-                item, chunks, confidence, policy_tags, grounded=grounding_result.grounded
+                routing_item, chunks, confidence, policy_tags, grounded=grounding_result.grounded
             )
             write_audit(
                 new_audit_event(

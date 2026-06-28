@@ -26,9 +26,20 @@ Import-safe: no side effects at import; load_env() and all app imports happen in
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
+
+# Enable line editing + in-session history at the input() prompt (↑ recalls the previous
+# question, ←/→ and backspace edit). `readline` is stdlib but POSIX-only (absent on Windows),
+# so it is imported optionally via importlib — the correct cross-platform pattern for a
+# platform-specific stdlib module (and ENV2 needs nothing pinned for a stdlib import).
+import importlib
+try:
+    importlib.import_module("readline")
+except ImportError:
+    pass
 
 # Ensure the repo root is on sys.path so `import app.*` resolves when run as
 # `python scripts/run_chat.py` from the repo root (mirrors scripts/run_demo.py).
@@ -45,12 +56,36 @@ Commands:
   :mode             show the current lane
   :help             show this help
   :quit             exit  (also Ctrl-D / Ctrl-C)
-After a question you'll be prompted for optional comma-separated topic tags
-(e.g. "security" or "legal" — a high-risk tag forces routing to a human)."""
+Topic tags are inferred automatically from the retrieved evidence (auto-tagging at
+intake); an inferred high-risk tag (e.g. legal/security) forces routing to a human."""
 
 
 def _sep(char: str = "─", width: int = 72) -> None:
     print(char * width)
+
+
+def _read_new_events(path: Path, start: int) -> list[dict]:
+    """Read audit JSONL events appended at/after byte offset `start` (this turn's events).
+
+    The pipeline appends one whole event per line, so `start` (the log size captured before
+    the run) is always a line boundary — reading the tail yields exactly this turn's steps
+    without scanning or re-parsing the whole growing file.
+    """
+    events: list[dict] = []
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            fh.seek(start)
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    events.append(json.loads(line))
+                except ValueError:
+                    continue
+    except OSError:
+        pass
+    return events
 
 
 def _make_provider(live: bool):
@@ -63,6 +98,8 @@ def _make_provider(live: bool):
             print("  ⚠️  live lane requested but ANTHROPIC_API_KEY is not set "
                   "— staying OFFLINE (MockLLM).")
             return MockLLM(), "offline (MockLLM)"
+        # Surface the two Claude requests (prompt + response) in the REPL trace.
+        os.environ["COMET_SHOW_PROMPTS"] = "1"
         return ClaudeLLM(), "LIVE (ClaudeLLM · claude-sonnet-4-6)"
     return MockLLM(), "offline (MockLLM)"
 
@@ -90,10 +127,9 @@ def _handle_question(
         "items": [QuestionnaireItem(item_id=item_id, question=question, topic_tags=tags)],
     }
 
-    # Transparency: show the candidates the retriever scores over (offline this is exactly
-    # what the pipeline retrieves on; the live lane refines the query first, so its set may
-    # differ slightly — noted below).
-    candidates = retriever.retrieve(question, topic_tags=tags if tags else None)
+    # Read only THIS turn's audit events: record the log size before the run, then read the
+    # tail afterwards (the pipeline writes one event per step — the canonical step record).
+    audit_start = audit_log_path.stat().st_size if audit_log_path.exists() else 0
 
     result = run_pipeline(
         questionnaire,
@@ -106,20 +142,40 @@ def _handle_question(
     print()
     _sep("=")
     print(f"Lane: {mode}")
-    if mode.startswith("LIVE"):
-        print("  (live lane refines the query first — retrieved set may differ slightly)")
 
-    # ---- Retrieved evidence panel ----
-    print("\nRetrieved evidence (top BM25 candidates):")
-    if not candidates:
-        print("  (none — no approved KB chunk matched)")
-    else:
-        for c in candidates:
-            preview = c.answer[:70].replace("\n", " ")
-            if len(c.answer) > 70:
-                preview += "..."
-            print(f"  [{c.chunk_id}]  score={c.bm25_score:.3f}  sens={c.sensitivity}")
-            print(f"            {preview}")
+    # ---- minimal per-step pipeline trace (one line per step, from the audit events) ----
+    print("\nPipeline:")
+    for ev in _read_new_events(audit_log_path, audit_start):
+        if ev.get("event") != "tool_call":
+            continue
+        d = ev.get("detail") or {}
+        tool = d.get("tool")
+        if tool == "refine_query":
+            opt = d.get("optimized") or ""
+            if opt and opt != d.get("original"):
+                print(f"  refine    → {opt[:76]}{'…' if len(opt) > 76 else ''}")
+        elif tool == "retrieve":
+            ids = d.get("chunk_ids") or []
+            shown = ", ".join(ids[:5]) + ("…" if len(ids) > 5 else "")
+            print(f"  retrieve  → {d.get('n_chunks', len(ids))} chunks: {shown or '(none)'}")
+        elif tool == "auto_tag":
+            t = d.get("inferred_tags") or []
+            print(f"  auto-tag  → {', '.join(t) if t else '(none)'}")
+        elif tool == "assemble_context":
+            print(f"  assemble  → {d.get('n_retrieval_entries', 0)} evidence entries")
+        elif tool == "draft_answer":
+            rc = d.get("reason_code")
+            print(f"  draft     → grounded={d.get('grounded')} · "
+                  f"{d.get('n_citations', 0)} cit" + (f" · {rc}" if rc else ""))
+        elif tool == "score_confidence":
+            s = d.get("score")
+            if s is not None:
+                print(f"  score     → {s:.3f} [{confidence_band(s)}]")
+        elif tool == "route_for_review":
+            if d.get("should_route"):
+                print(f"  route     → ⚠ {d.get('queue')} · {d.get('reason_code')}")
+            else:
+                print("  route     → ✓ not routed")
 
     if not result.response_doc.items:
         print("\n(no result produced)")
@@ -128,31 +184,20 @@ def _handle_question(
 
     doc_item = result.response_doc.items[0]
     routing = result.routing.get(item_id)
-    score = doc_item.confidence_score
-    band = confidence_band(score) if score is not None else "n/a"
-
     if item_id in result.errors:
         print(f"\n⚠️  component error (safe-terminal): {result.errors[item_id]}")
 
-    # ---- Comet's answer ----
-    print("\nComet's answer:")
+    # ---- the LLM response (the drafted answer) ----
+    print("\nAnswer:")
     if doc_item.draft_text == UNGROUNDED_PLACEHOLDER:
         print(f"  {UNGROUNDED_PLACEHOLDER}")
         print("  (no grounded evidence found — routed for human input)")
     else:
         print(f"  {doc_item.draft_text}")
-
     cited = [c.chunk_id for c in doc_item.citations]
     print(f"\nCitations : {cited if cited else '(none)'}")
-    if score is not None:
-        print(f"Confidence: {score:.3f}  [{band}]")
-    print(f"State     : {doc_item.status}")
     if routing is not None and routing.should_route:
-        print(f"Routing   : ⚠️  ROUTED → queue={routing.queue!r}  reason={routing.reason_code}")
-        print(f"            {REVIEW_BANNER}")
-    else:
-        print("Routing   : ✓  confident draft — NOT routed "
-              "(still awaits a human APPROVED before any export)")
+        print(f"  {REVIEW_BANNER}")
     _sep("=")
 
 
@@ -219,13 +264,8 @@ def main() -> None:
             print(f"  unknown command {raw!r} — type :help")
             continue
 
-        # A question. Offer optional topic tags (these can trigger high-risk routing).
-        try:
-            tags_raw = input("   Tags (comma-sep, Enter=none): ").strip()
-        except (EOFError, KeyboardInterrupt):
-            tags_raw = ""
-            print()
-        tags = [t.strip() for t in tags_raw.split(",") if t.strip()]
+        # Topic tags are inferred automatically at intake (auto_tag) — no manual prompt.
+        tags: list[str] = []
 
         counter += 1
         qid = f"repl-{counter:03d}"
