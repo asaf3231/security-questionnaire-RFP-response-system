@@ -240,8 +240,10 @@ def run_eval(
         conf: ConfidenceResult = score_confidence(chunks, grounding, question)
         band: str = confidence_band(conf.score)
 
-        # Routing decision
-        decision = route_for_review(item, chunks, conf, policy_tags)
+        # Routing decision — thread the grounding outcome so the eval exercises the SAME
+        # routing path as production (DN-QA50 PR-1 trigger 5: ungrounded → route). Without
+        # this, an ungrounded gold case with no other trigger would diverge from the pipeline.
+        decision = route_for_review(item, chunks, conf, policy_tags, grounded=grounding.grounded)
         actual_routed = decision.should_route
         actual_queue = decision.queue
         actual_reason = decision.reason_code

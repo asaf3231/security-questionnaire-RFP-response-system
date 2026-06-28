@@ -43,6 +43,7 @@ from app.config import (
     ROUTED_HIGH_RISK,
     ROUTED_LOW_CONFIDENCE,
     ROUTED_SENSITIVE,
+    ROUTED_UNGROUNDED,
     RULE_HITM_REVIEW_TRIGGER,
     SENSITIVITY_REVIEW_QUEUE,
 )
@@ -91,6 +92,8 @@ def route_for_review(
     chunks: list[RetrievedChunk],
     confidence: ConfidenceResult,
     policy_tags: dict,
+    *,
+    grounded: bool = True,
 ) -> RoutingDecision:
     """Decide whether to route an item for human review.
 
@@ -178,6 +181,20 @@ def route_for_review(
             should_route=True,
             queue=SENSITIVITY_REVIEW_QUEUE,
             reason_code=ROUTED_SENSITIVE,
+            rule=RULE_HITM_REVIEW_TRIGGER,
+        )
+
+    # ---- Trigger 5 [DN-QA50 PR-1]: Ungrounded draft — absolute lowest precedence ----
+    # A draft that failed the grounding gate (text = UNGROUNDED_PLACEHOLDER) must still
+    # reach a human even when none of triggers 1–4 fired (RULE_GROUNDED_ONLY: "⇒ placeholder
+    # + route"). Placed LAST so it never relabels an item another trigger already caught;
+    # the default grounded=True keeps every pre-PR-1 caller byte-identical.
+    if not grounded:
+        queue = _resolve_queue(item.topic_tags, routing_map)
+        return RoutingDecision(
+            should_route=True,
+            queue=queue,
+            reason_code=ROUTED_UNGROUNDED,
             rule=RULE_HITM_REVIEW_TRIGGER,
         )
 

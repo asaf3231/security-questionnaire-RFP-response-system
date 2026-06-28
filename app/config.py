@@ -86,6 +86,9 @@ REVIEWER_QUEUES: list[str] = ["security", "legal", "engineering", "gtm", "compli
 # Stage 7 — Option-A sensitivity routing (Asaf-authorized graded additions)
 SENSITIVITY_REVIEW_QUEUE: str = "compliance"  # must ∈ REVIEWER_QUEUES
 ROUTED_SENSITIVE: str = "ROUTED_SENSITIVE"    # 4th RULE_HITM_REVIEW_TRIGGER reason-code
+# DN-QA50 PR-1 (Asaf-ratified graded addition): 5th/lowest-precedence trigger — an ungrounded
+# draft must still route to a human even when no other trigger fired (RULE_GROUNDED_ONLY).
+ROUTED_UNGROUNDED: str = "ROUTED_UNGROUNDED"   # 5th RULE_HITM_REVIEW_TRIGGER reason-code (app/routing.py)
 HIGH_RISK_TAGS: list[str] = ["legal", "security"]              # presence → mandatory routing
 SENSITIVITY_TAGS: list[str] = ["public", "internal", "restricted"]  # internal/restricted never auto-export
 

@@ -221,12 +221,17 @@ def grounding_check(
     # the draft text is lexically covered by the citations.
     if question is not None:
         question_tokens = _significant_tokens(question)
-        if question_tokens:
-            cited_tokens = _significant_tokens(cited_text)
-            question_overlap = question_tokens.intersection(cited_tokens)
-            question_coverage = len(question_overlap) / len(question_tokens)
-            if question_coverage < GROUNDING_QUESTION_COVERAGE_MIN:
-                return _ungrounded_result()
+        if not question_tokens:
+            # PR-2 [DN-QA50]: a contentless question (zero significant tokens, e.g.
+            # "What about it?") cannot be confidently answered — fail condition 4 CLOSED
+            # rather than skipping it. The prior `if question_tokens:` guard failed OPEN,
+            # letting an explicit non-answer ship as auto-confident.
+            return _ungrounded_result()
+        cited_tokens = _significant_tokens(cited_text)
+        question_overlap = question_tokens.intersection(cited_tokens)
+        question_coverage = len(question_overlap) / len(question_tokens)
+        if question_coverage < GROUNDING_QUESTION_COVERAGE_MIN:
+            return _ungrounded_result()
 
     # All conditions passed → grounded
     return GroundingResult(grounded=True, answer=draft, reason_code=None)

@@ -322,7 +322,9 @@ def run_pipeline(
             # ----------------------------------------------------------------
             # 5. ROUTE FOR REVIEW
             # ----------------------------------------------------------------
-            routing_decision = route_for_review(item, chunks, confidence, policy_tags)
+            routing_decision = route_for_review(
+                item, chunks, confidence, policy_tags, grounded=grounding_result.grounded
+            )
             write_audit(
                 new_audit_event(
                     questionnaire_id=questionnaire_id,
