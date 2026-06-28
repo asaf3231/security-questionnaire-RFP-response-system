@@ -59,19 +59,59 @@ reason-code, and a test that scans for it. The model cannot talk its way past th
 - **Routing accuracy = 1.0**; **grounding match = 1.0**, with **raw_grounded = 0.833** — the eval
   deliberately includes a **known-ungrounded negative case** the gate must catch (it does), so the metric
   can actually go red. A green suite with no red case proves nothing.
-- **Offline suite: 569 pass / 1 skip / 2 xfail**, fully deterministic, network-free; the 1 skip is the
-  live-gated error-path check and the 2 xfail document a known lexical-grounding limitation honestly.
+- **Offline suite: 580 pass / 1 skip / 2 xfail** (current counts in `FACTS.md`), fully deterministic,
+  network-free; the 1 skip is the live-gated error-path check and the 2 xfail document a known
+  lexical-grounding limitation honestly.
 - **Demo cases:** a confident auto-draft (exported after human approval) and a human-review exception
   (routed, banner-flagged, never auto-included).
+
+## Business impact (qualitative — no production telemetry yet; see Assumptions)
+- **Cycle time:** a grounded, cited first draft per item in seconds instead of a manual Drive hunt +
+  copy-paste — the bottleneck moves from *finding* an answer to *approving* a draft.
+- **GTM capacity:** AE/SE hours go back to selling; Security/Legal touch only the **routed** risky/sensitive
+  minority, not every questionnaire.
+- **Accuracy & compliance posture:** every exported answer is grounded in an approved KB chunk, cited, and
+  audited — fewer wrong/unapproved answers and a defensible trail for Security/Legal.
+- **Win rate (indirect):** faster, more consistent, more credible security responses remove a common
+  late-stage deal blocker.
+- *Quality is measured, not asserted — Recall@K / routing / grounding accuracy live in `FACTS.md`.*
+
+## Human stays in control — and what must be true before rollout
+The agent drafts, scores, and routes, but **never self-approves and never sends** — a named reviewer
+approves before anything exports. Before an internal rollout, the following must hold:
+- the KB is **curated and approval-gated** (only approved answers are retrievable);
+- the **reviewer queues are staffed** (security / legal / engineering / gtm / compliance) with an agreed turnaround;
+- **audit retention** is agreed with Security/Legal (the append-only JSONL is the system of record);
+- an **accuracy / coverage bar** is accepted on the labeled eval; and
+- the **live-citation-yield** mitigation is in place (uncited live drafts route to a human — see limitations).
+
+## Build vs. buy
+A thin, in-house agent beats a generic RFP SaaS here because the value *is* **governance**: code-enforced
+guardrails, a complete audit trail, and a hard no-external-send boundary on Reindeer's own data — none of
+which a black-box vendor can guarantee.
 
 ## Honest limitations (surfaced, not hidden)
 - Grounding is **lexical** coverage, not semantic — backstopped by the live lane + human review.
 - **Live grounding is materially lower than offline mock grounding** (characterized in
-  `redteam/LIVE_RUN_FINDINGS*.md`): when the live model omits inline `[chunk_id]` citations the gate
+  `redteam/QA_AUDIT_50.md`): when the live model omits inline `[chunk_id]` citations the gate
   correctly forces human review rather than shipping an uncited claim. This is the safety property
   working as designed, not a regression. (It is also why the live draft prompt was changed to demand
   inline citations + answer-only output.)
 - The KB is bounded synthetic data; production value scales with KB coverage.
+
+## Assumptions
+- KB, questionnaires, and policy tags are **synthetic** stand-ins for the real approved-answer corpus.
+- Retrieval is **lexical** (`rank_bm25`); production may add semantic retrieval.
+- Reviewers and queues exist and act on routed items; SLAs are organizational, not modeled here.
+- Scope is the draft → route → audit loop; ticketing / e-sign / CRM integrations are out of scope by design.
+
+## Future roadmap — the next automation after a successful rollout
+1. **KB auto-curation:** turn newly *won* / approved answers into KB chunks automatically (a reviewer-feedback
+   loop) so coverage compounds with every deal — the highest-leverage next step.
+2. **Reviewer-feedback learning:** capture edits/approvals to tune confidence calibration and flag stale answers.
+3. **Adjacent docs:** extend from questionnaires to MSAs / DPAs and the security sections of full RFPs.
+4. **Integrations:** read questionnaires straight from Drive and push approved exports back — keeping the
+   human-approval gate intact.
 
 ## What a 20-minute demo shows
 1. `make demo` — both mandated cases end-to-end, offline, deterministic.
