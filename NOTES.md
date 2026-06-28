@@ -405,6 +405,70 @@ fix depends on this choice → deferred until Asaf decides.
 > `NOTES_archive.md` 2026-06-27 — all re-fetchable from `FACTS.md` + `handbacks/stage-*.md` + tags.
 > The design decisions (above) and the handback pointers stay live here._
 
+### DN-QA50 — Live 50-run audit → 4 graded-contract fixes (DECISION-NEEDED; Asaf sign-off pending; NOT implemented)
+**Source:** `redteam/QA_AUDIT_50.md` (multi-agent audit of `redteam/live_review_50.jsonl`, live `claude-sonnet-4-6`, 50 inputs, 2026-06-28). Cross-run reference `redteam/LIVE_RUN_FINDINGS.md`. **Status: documented only — no code changed.** Asaf reviews this block, signs off the exact logic/thresholds, *then* we map implementation.
+**What the audit confirmed is healthy (do NOT touch):** gate fails closed on hallucination (all 11 rejections correct; 8/8 mock→live flips toward review); routing-queue mapping **25/25** to the correct org owner; gold accuracy 6/6 grounded · 11/11 routing; **0 self-approvals** (`RULE_NO_SELF_APPROVE` held). The four PRs below target *gaps*, not the working core.
+**Four findings, each a graded-contract change → DECISION-NEEDED (a graded contract may not change without Asaf, per CLAUDE.md §0 / §0.1):**
+
+- **PR-1 — Stranded Draft (CRITICAL).** *Finding:* `BO-035` is `grounded=False` (coverage 0.354) → text = `UNGROUNDED_PLACEHOLDER`, **yet `should_route=False`** (conf 0.593 ≥ 0.50, public, non-high-risk tag → no trigger fired). The placeholder literally says "ROUTED FOR HUMAN INPUT" but the item is in **no queue**. 10/11 ungrounded items routed only by a *coincidental* trigger. *Root cause:* grounding failure and routing are **decoupled** (`grounding_check` sets `grounded=False` but not `should_route`); the 0.50–0.75 "review" band is cosmetic (`ROUTED_LOW_CONFIDENCE` fires only < 0.50). **Violates `RULE_GROUNDED_ONLY` ("⇒ `UNGROUNDED_PLACEHOLDER` + route").** Same decoupling family as [[GOV-FAIL-S7]], on the grounding axis. *Proposed fix (needs sign-off):* make grounding failure its own routing trigger — `if grounding.reason_code == GROUNDING_FAIL → should_route=True`, queue by topic tag, fallback `DEFAULT_REVIEWER_QUEUE`, independent of the confidence floor. *Graded surface:* `app/routing.py` `route_for_review` precedence + possibly a new `ROUTED_UNGROUNDED` reason-code (or reuse an existing one — **Asaf to pick**). *Open question:* new reason-code vs reuse `ROUTED_LOW_CONFIDENCE`?
+
+- **PR-2 — Relevance-gate bypass on contentless questions (CRITICAL).** *Finding:* `BO-029` ("What about it?") → `grounded=True`, `question_coverage=1.0` (vacuous), `band=auto`, **not routed** — an explicit non-answer ("does not specify a subject… please clarify") scored as a confident auto-draft. Siblings `BO-024/033/036/037/039` (single-token fragments) similarly ship. *Root cause:* condition 4 is wrapped in `if question_tokens:` (`app/draft.py:222-229`) — a zero-significant-token question **skips** the relevance check, failing *open*. *Proposed fix (needs sign-off):* when `question_tokens` is empty, fail condition 4 **closed** (ungrounded → route) instead of skipping. *Graded surface:* `app/draft.py` `grounding_check` behavior (signature unchanged). *Open question:* treat as ungrounded (placeholder), or grounded-but-force-route? (interacts with PR-1).
+
+- **PR-3 — Fact-padding / no absolute ungrounded-token floor.** *Finding:* `BO-013` (coverage 0.592, ≈202 significant tokens, 4 citations) ships as `auto`/not-routed while ≈82 significant tokens are absent from any cited chunk. *Root cause:* `_compute_coverage` (`app/draft.py:128-140`) is a **ratio** over draft tokens against the **union** of cited chunks — longer answers + more citations make 0.50 easier to clear regardless of absolute ungrounded volume. *Proposed fix (needs sign-off):* add an absolute cap alongside the ratio — reject if `len(draft_tokens) − overlap > N`. *Graded surface:* `app/draft.py` + a new §9 constant (e.g. `GROUNDING_MAX_UNGROUNDED_TOKENS`). *Open question:* the value of `N` (needs a sweep over the 50-run drafts so it doesn't reject legitimate long answers).
+
+- **PR-4 — Boundary instability (the borderline coin-flip).** *Finding:* `BO-026` flipped KEPT↔REJECTED across the 09:12 vs 11:04 runs (coverage 0.563, right at the 0.50 cliff). ~7 items (14%) sit within ±0.10 of the threshold → non-deterministic gate decision run-to-run. *Root cause:* a single hard threshold, no hysteresis; live paraphrase wobble moves coverage across the cliff. *Proposed fix (needs sign-off):* route-for-review (don't auto-draft) any item with content-coverage in a buffer band (e.g. `0.45 ≤ coverage < 0.55`). *Graded surface:* `app/routing.py` or `app/confidence.py` banding + possibly new §9 buffer constants. *Open question:* buffer band bounds, and whether this belongs in routing or confidence.
+
+**Cross-cutting decisions Asaf should make before implementation:** (1) do PR-1 and PR-2 collapse into one rule ("any ungrounded item routes")? (2) reason-code vocabulary (new vs reuse); (3) PR-3 `N` and PR-4 band bounds need an empirical sweep — should that sweep be a precursor sub-task? (4) all four are **add-only-able** to `app/` but each is a graded contract, so each needs the §0.1 surfacing + a `/code-review` gate; none should be self-landed by an executer. **Determinism guardrail:** offline `MockLLM` echoes chunks verbatim, so PR-1..PR-4 must keep the offline suite byte-identical (verify `make test` + `make eval` unchanged); any test that legitimately changes is a two-key `RULE_GRADED_ARTIFACT_LOCK` event (see [[D-GOV1]]), not a silent edit.
+
+**VERIFIER VERDICT — DN-QA50 (PM independent re-derivation per §0.1; 2026-06-28).** Re-ran the raw
+`redteam/live_review_50.jsonl` myself — recomputed tokens/coverage/queues with the REAL
+`app.draft._significant_tokens` + `policy_tags.routing_map`, did NOT trust the audit. **Baseline GREEN
+at the pre-edit HEAD** (`make test` + `make eval` re-run clean; counts → [[FACTS]]) → a clean revision to
+diff any change against.
+- **Confirmed exactly (5/6):** BO-035 stranded (grounded=False, route=False, queue=None, cov 0.3535,
+  conf 0.593); BO-029 bypass ("What about it?" → 0 significant tokens, grounded=True/auto/not-routed,
+  qcov 1.0 vacuous); BO-026 cross-run (11:04 KEPT cov 0.5634 vs 09:12 ungrounded+ROUTED_LOW_CONFIDENCE);
+  25/25 routed→correct queue (re-derived from routing_map+precedence: HIGH_RISK 10 / SENSITIVE 12 /
+  LOW_CONF 2 / AMBIGUOUS 1 → security 9 / legal 4 / compliance 12); gold 6/6 grounding + 11/11 routing;
+  0 self-approvals.
+- **CORRECTION (BO-013 / PR-3):** vulnerability is REAL (grounded=True, cov 0.592, not routed) but the
+  audit's token magnitudes are **WRONG** — the real stopword-filtered count is **125 draft tokens /
+  ~51 ungrounded**, NOT "≈202 / 82". The PR-3 sweep MUST use `_significant_tokens`; do not calibrate `N`
+  off the audit's inflated 82. (This is exactly what §0.1 re-derivation exists to catch.)
+
+**Verifier recommendations (graded contracts → PENDING ASAF RATIFICATION, not decisions):**
+- **PR-1 (V1 stranded) — APPROVE, REVISE placement.** Real `RULE_GROUNDED_ONLY` violation; CRITICAL.
+  Pin: ADDITIVE optional kwarg `grounded: bool = True` on `route_for_review` (backward-compatible default
+  → no existing call/test edit; add-only); new trigger at **ABSOLUTE LOWEST precedence (after
+  sensitivity)** so it fires only for items no other trigger caught — preserves eval-006
+  (=ROUTED_LOW_CONFIDENCE) and every existing routed gold → offline suite/eval stay byte-identical. New
+  §9 reason-code `ROUTED_UNGROUNDED` (do NOT reuse ROUTED_LOW_CONFIDENCE — BO-035 was 0.593, not
+  low-conf; reuse corrupts calibration/triage). queue = `_resolve_queue(tags)` → `DEFAULT_REVIEWER_QUEUE`.
+  New tests ADDED for the stranded case.
+- **PR-2 (V2 relevance bypass) — APPROVE.** Pin: in `grounding_check`, when `_significant_tokens(question)`
+  is empty → fail condition 4 CLOSED (ungrounded → GROUNDING_FAIL); no signature change. Composes with
+  PR-1 (contentless → ungrounded → routes). **SCOPE LIMIT:** fixes ZERO-token questions only; the
+  single-token fragments (BO-024/033/036/037/039) are lexically defensible (lone keyword sits in a chunk)
+  and are NOT closed by PR-2 — a real fix is semantic relevance → DEFER as out-of-scope (flag, don't
+  pretend PR-2 covers them).
+- **PR-3 (V3 fact-padding) — APPROVE THE SWEEP, DEFER the cap value.** Distinct from PR-1 (BO-013 is
+  grounded, so PR-1 won't catch it); lowest urgency (mostly-grounded + still needs human APPROVE).
+  Precursor sub-task: sweep absolute-ungrounded-token counts (via `_significant_tokens`) over the 50-run
+  drafts to pick `N` that catches BO-013 (~51) without rejecting legit long answers (eval-003). Pin `N` +
+  `GROUNDING_MAX_UNGROUNDED_TOKENS` AFTER the sweep.
+- **PR-4 (V4 boundary instability) — DEFER.** Still distinct after PR-1 (PR-1 stabilizes only the
+  below-0.50/ungrounded side; the 0.50–0.55 grounded side still auto-drafts → flips persist). Needs a
+  decision on home (routing currently can't see `coverage` → a data-flow change) + band bounds from a
+  sweep. Re-measure the flip rate AFTER PR-1/PR-2 land, then decide.
+
+**Cross-cutting answers:** (1) PR-1+PR-2 do NOT fully collapse but COMPOSE — PR-2 makes contentless
+ungrounded; PR-1 routes all ungrounded. Ship PR-1 (backstop) then PR-2 (detection). (2) reason-code =
+NEW `ROUTED_UNGROUNDED`. (3) YES — PR-3 `N` and PR-4 band bounds are a PRECURSOR sweep sub-task (must use
+`_significant_tokens`); approve the sweep before pinning either value. (4) all four ADDITIVE + graded →
+§0.1 surfacing + `/code-review`, no executer self-land; PR-1's additive-default kwarg keeps it add-only.
+Determinism guardrail HOLDS for PR-1/PR-2 as pinned (eval-006 + all routed gold preserved) — confirm
+`make test`/`make eval` byte-identical post-implementation; any legit test change = two-key [[D-GOV1]] event.
+
 ### Open follow-ups (live)
 - **Stage 7 (deferred minor):** `confidence.py` rebuilds coverage/dominance in the rationale builder
   (duplicate of `_compute_score`) — refactor `_compute_score` to return components so the rationale

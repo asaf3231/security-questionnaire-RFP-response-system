@@ -318,3 +318,8 @@ of `crazy_test_prompt.md` (left untracked); brief a fresh KB-expansion stage if 
 Watch out for / open: live grounding ≪ mock grounding by design (gate forces human review on missing
 citations — characterized in `redteam/LIVE_RUN_FINDINGS*.md`); no `origin` remote. The two §9 constants +
 the COT-test retirement are the graded-contract changes Asaf authorized this session.
+
+## 2026-06-28 11:30 — [BACKEND] SESSION START
+Picking up: **all planned stages 0–10 ✅ complete** (per STATE.md, HEAD was 45c0dc6). Onboarded fresh PM: read PM_Methodology_Prompt.md + STATE.md, reconciled vs git.
+State as read (to re-verify): STATE.md stale by 2 ledger commits — live HEAD is **ae080a8 ("cleaner")** on branch `redteam/crazy-testing` (45c0dc6 → 0be05fc stamp → ae080a8). Uncommitted: `redteam/LIVE_RUN_FINDINGS.md` modified (−87/+14, a trim), `scripts/run_live_review.py` untracked (380-line live-review helper). Suite last recorded 569 pass / 1 skip / 2 xfail (FACTS = source of truth; not re-run yet this session).
+Plan for this session: await Asaf direction. First task from Asaf: assess whether the system can take a **PDF questionnaire** as input.
