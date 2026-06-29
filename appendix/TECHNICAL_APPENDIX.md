@@ -26,7 +26,7 @@ INTAKE → refine_query (Stage 10) → retrieve → assemble_context → draft_a
 | `app/llm.py` | `LLMProvider` → `MockLLM` (offline) / `ClaudeLLM` (gated live) | `DRAFT1`/`DRAFT2` |
 | `app/draft.py` | `draft_answer` + `grounding_check` | `RULE_GROUNDED_ONLY` |
 | `app/confidence.py` | deterministic score + LLM rationale-only | `CONF1`–`CONF3` |
-| `app/routing.py` | the 4 review triggers | `RULE_HITM_REVIEW_TRIGGER` |
+| `app/routing.py` | the 5 review triggers | `RULE_HITM_REVIEW_TRIGGER` |
 | `app/state.py` | state machine + no-self-approve guard | `RULE_NO_SELF_APPROVE` |
 | `app/audit.py` | append-only JSONL writer + redaction | `RULE_AUDIT_COMPLETE` |
 | `app/export.py` | Markdown+CSV, approved-only, sensitivity gate | `RULE_NO_EXTERNAL_SEND` / `RULE_SENSITIVITY_GATE` |
@@ -35,8 +35,8 @@ INTAKE → refine_query (Stage 10) → retrieve → assemble_context → draft_a
 `QuestionnaireItem(item_id, question, topic_tags[])` · `RetrievedChunk(chunk_id, answer, source,
 sensitivity, topic_tags[], bm25_score)` · `ContextStack(instruction, retrieval[], constraint, state,
 question)` — `question` (default `""`) was added in Stage 10 so the original question reaches the draft
-prompt (backward-compatible) · `Citation(chunk_id)` · `DraftAnswer(text, citations[])` ·
-`ConfidenceResult(score, rationale, components)` · `RoutingDecision(should_route, queue, reason_code)` ·
+prompt (backward-compatible) · `Citation(chunk_id, source)` · `DraftAnswer(text, citations[])` ·
+`ConfidenceResult(score, rationale)` · `RoutingDecision(should_route, queue, reason_code, rule)` ·
 `AuditEvent(timestamp, questionnaire_id, item_id, event, from_state, to_state, rule, detail)` ·
 `ResponseDoc(items[])` / `ResponseDocItem(..., sensitivities[], review_approved)`.
 
@@ -47,8 +47,14 @@ prompt (backward-compatible) · `Citation(chunk_id)` · `DraftAnswer(text, citat
 - **`MockLLM`** is deterministic and seeded (`RANDOM_SEED`); it never emits `<thinking>`; its
   `refine_query` is the identity default → the offline graded path is byte-identical.
 - **`ClaudeLLM`** (live lane, `DRAFT_MODEL`, `DRAFT_TEMPERATURE=0.0`): wraps the API call; on
-  timeout/error it degrades to `UNGROUNDED_PLACEHOLDER` (never a partial/invented answer). The draft
-  prompt requests **inline `[chunk_id]` citations + answer-only output** (no reasoning section).
+  timeout/error it degrades to `UNGROUNDED_PLACEHOLDER` (never a partial/invented answer).
+- **`submit_answer` tool (live-lane structured citations).** The draft call uses Anthropic native
+  **tool use**: it passes a `submit_answer` tool whose `input_schema` makes `answer` **and** `citations`
+  (chunk_id array) *required*, forced via `tool_choice={"type":"tool","name":"submit_answer"}`. So
+  citations are a **schema-required field**, not regex-scraped from prose — this removed the intermittent
+  `cit=0` failure (model dropping inline `[chunk_id]` markers). Tool citations are validated against the
+  retrieval layer (fabricated ids dropped, de-duped) and unioned with any inline markers; a text-only
+  response falls back to the prose-parse path (`_extract_tool_answer` / `_known_chunk_ids`).
 - **Query refinement (Stage 10):** `ClaudeLLM.refine_query` may reason inside `<thinking>…</thinking>`
   and emit keywords after it; `strip_thinking_block` (a deterministic, depth-aware, nested-safe scan)
   removes the reasoning so only clean keywords reach BM25, bounded by `MAX_REFINED_QUERY_CHARS` /
@@ -78,14 +84,21 @@ evidence addresses the question ≥ `GROUNDING_QUESTION_COVERAGE_MIN`. Otherwise
 `ITEM_STATES = INTAKE → RETRIEVED → DRAFTED → SCORED → {ROUTED_FOR_REVIEW → REVIEW_APPROVED |
 REVIEW_REJECTED} → APPROVED → EXPORTED`. Illegal edges raise `InvalidTransition`. The agent may never
 transition to APPROVED/EXPORTED — only `actor="human"` can (`SelfApproveBlocked` otherwise).
+**Human review, two modes:** `make demo` auto-simulates approval for confident/non-sensitive items
+(still `actor="human"`); `run_questionnaire.py --approve` is an interactive per-item gate
+(`[a]pprove / [r]eject / [s]kip`) where a routed item walks the real path
+`ROUTED_FOR_REVIEW → REVIEW_APPROVED → APPROVED` and a reject becomes `REVIEW_REJECTED` (stays
+unexported, rendered as "answer rejected"). Each human decision writes its own `state_transition` audit
+event (`RULE_NO_SELF_APPROVE`, `actor="human"`).
 
 ## 6. Reviewer routing (`app/routing.py`)
-`RULE_HITM_REVIEW_TRIGGER`, precedence order: (1) high-risk tag (`HIGH_RISK_TAGS`) → `ROUTED_HIGH_RISK`;
-(2) ambiguous retrieval (top1−top2 BM25 gap < `AMBIGUITY_SCORE_MARGIN`) → `ROUTED_AMBIGUOUS`;
-(3) confidence < `CONFIDENCE_REVIEW_THRESHOLD` → `ROUTED_LOW_CONFIDENCE`; (4) internal/restricted
-sensitivity → `SENSITIVITY_REVIEW_QUEUE` ("compliance") → `ROUTED_SENSITIVE` (Stage 7 / Option A, lowest
-precedence, unblocks the export gate). Queue comes from the policy `routing_map`, else
-`DEFAULT_REVIEWER_QUEUE`; all queues ⊆ `REVIEWER_QUEUES`.
+`RULE_HITM_REVIEW_TRIGGER`, precedence order (first match wins): (1) high-risk tag (`HIGH_RISK_TAGS`) →
+`ROUTED_HIGH_RISK`; (2) ambiguous retrieval (top1−top2 BM25 gap < `AMBIGUITY_SCORE_MARGIN`) →
+`ROUTED_AMBIGUOUS`; (3) confidence < `CONFIDENCE_REVIEW_THRESHOLD` → `ROUTED_LOW_CONFIDENCE`;
+(4) internal/restricted sensitivity → `SENSITIVITY_REVIEW_QUEUE` ("compliance") → `ROUTED_SENSITIVE`
+(Stage 7 / Option A); (5) ungrounded draft → `ROUTED_UNGROUNDED` (DN-QA50, **lowest** precedence — an
+ungrounded answer still reaches a human even when no other trigger fired). Queue comes from the policy
+`routing_map`, else `DEFAULT_REVIEWER_QUEUE`; all queues ⊆ `REVIEWER_QUEUES`.
 
 ## 7. Audit & logging (`app/audit.py`)
 A single append-only JSONL writer emits exactly one `AuditEvent` per state transition and per tool call
