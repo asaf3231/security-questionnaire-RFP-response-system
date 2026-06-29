@@ -9,8 +9,11 @@ Four routing triggers (first match sets the reason_code — precedence enforced)
   1. High-risk tag   — item.topic_tags ∩ high_risk_tags → ROUTED_HIGH_RISK
   2. Ambiguity       — top1−top2 BM25 gap < AMBIGUITY_SCORE_MARGIN → ROUTED_AMBIGUOUS
   3. Low confidence  — score < CONFIDENCE_REVIEW_THRESHOLD → ROUTED_LOW_CONFIDENCE
-  4. Sensitivity     — any chunk sensitivity ∈ {internal, restricted} → ROUTED_SENSITIVE
-                       (lowest precedence; only fires when triggers 1–3 did not)
+  4. Sensitivity     — a CITED chunk's sensitivity ∈ {internal, restricted} → ROUTED_SENSITIVE
+                       (cite-based: keys off the chunks the answer rests on, aligning routing
+                        with the cite-based export gate; falls back to the full retrieved set
+                        when cited_chunk_ids is not supplied. Lowest precedence — fires only
+                        when triggers 1–3 did not)
 
 Queue resolution for triggers 2/3:
   - Iterate item.topic_tags in declaration order; return the first tag that has an
@@ -94,6 +97,7 @@ def route_for_review(
     policy_tags: dict,
     *,
     grounded: bool = True,
+    cited_chunk_ids: set[str] | None = None,
 ) -> RoutingDecision:
     """Decide whether to route an item for human review.
 
@@ -104,8 +108,10 @@ def route_for_review(
       1. High-risk tag  (ROUTED_HIGH_RISK)    — checked first; ignores score.
       2. Ambiguity      (ROUTED_AMBIGUOUS)    — top1−top2 gap < AMBIGUITY_SCORE_MARGIN.
       3. Low confidence (ROUTED_LOW_CONFIDENCE) — score < CONFIDENCE_REVIEW_THRESHOLD.
-      4. Sensitivity    (ROUTED_SENSITIVE)    — any chunk sensitivity ∈ {internal, restricted};
-                                               lowest precedence (fires only if 1–3 did not).
+      4. Sensitivity    (ROUTED_SENSITIVE)    — a CITED chunk's sensitivity ∈ {internal, restricted};
+                                               cite-based, falling back to all retrieved chunks when
+                                               cited_chunk_ids is None; lowest precedence (fires only
+                                               if 1–3 did not).
 
     When no trigger fires → RoutingDecision(should_route=False, queue=None, ...).
 
@@ -122,6 +128,13 @@ def route_for_review(
         The dict returned by app.kb.load_policy_tags(); must contain:
           "high_risk_tags": list[str]   — overrides the §9 HIGH_RISK_TAGS default.
           "routing_map": dict[str, str] — tag → reviewer queue mapping.
+    cited_chunk_ids:
+        The chunk_ids the draft actually CITED. When supplied, the sensitivity
+        trigger (4) considers only these chunks — aligning routing with the
+        cite-based export gate so a sensitive neighbor that was merely retrieved
+        does not over-route a public, grounded answer. When None (default), the
+        trigger falls back to the full retrieved set — keeping every pre-existing
+        caller byte-identical.
 
     Returns
     -------
@@ -173,10 +186,18 @@ def route_for_review(
         )
 
     # ---- Trigger 4: Sensitivity (lowest precedence) -------------------------
-    # If any retrieved chunk carries a sensitivity that warrants human review
-    # (internal or restricted) and none of the higher-priority triggers fired,
-    # route to the sensitivity reviewer queue.
-    if any(c.sensitivity in _SENSITIVE_VALUES for c in chunks):
+    # Route when the answer RESTS ON sensitive material — i.e. a chunk the draft
+    # CITED carries an internal/restricted tag — and no higher-priority trigger
+    # fired. This aligns routing with the cite-based export gate (app/export.py):
+    # a sensitive chunk that was merely retrieved (not cited) no longer over-routes
+    # a public, grounded answer. When cited_chunk_ids is None (a direct caller with
+    # no draft context), fall back to the full retrieved set so legacy callers stay
+    # byte-identical (mirrors the grounded= default).
+    if cited_chunk_ids is None:
+        sensitivity_chunks = chunks
+    else:
+        sensitivity_chunks = [c for c in chunks if c.chunk_id in cited_chunk_ids]
+    if any(c.sensitivity in _SENSITIVE_VALUES for c in sensitivity_chunks):
         return RoutingDecision(
             should_route=True,
             queue=SENSITIVITY_REVIEW_QUEUE,

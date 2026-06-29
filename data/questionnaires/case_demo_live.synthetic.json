@@ -23,7 +23,7 @@
     },
     {
       "item_id": "q-demo-live-001-i5",
-      "question": "Are you SOC 2 Type II certified, and how often is the audit refreshed?",
+      "question": "What is your recertification renewal frequency in months?",
       "topic_tags": ["certification", "compliance"]
     },
     {

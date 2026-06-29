@@ -243,7 +243,15 @@ def run_eval(
         # Routing decision — thread the grounding outcome so the eval exercises the SAME
         # routing path as production (DN-QA50 PR-1 trigger 5: ungrounded → route). Without
         # this, an ungrounded gold case with no other trigger would diverge from the pipeline.
-        decision = route_for_review(item, chunks, conf, policy_tags, grounded=grounding.grounded)
+        decision = route_for_review(
+            item,
+            chunks,
+            conf,
+            policy_tags,
+            grounded=grounding.grounded,
+            # Run the same cite-based sensitivity gate as production (META-REALPATH).
+            cited_chunk_ids={c.chunk_id for c in grounding.answer.citations},
+        )
         actual_routed = decision.should_route
         actual_queue = decision.queue
         actual_reason = decision.reason_code
