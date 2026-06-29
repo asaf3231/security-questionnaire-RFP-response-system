@@ -2,10 +2,15 @@
 scripts/run_questionnaire.py — run any questionnaire through the pipeline and write a report file.
 
 Usage:
-  python scripts/run_questionnaire.py [QUESTIONNAIRE_PATH] [--live] [--out FILE] [--response]
+  python scripts/run_questionnaire.py [QUESTIONNAIRE_PATH] [--live] [--out FILE] [--response] [--approve]
 
   --response  also write the send-ready response document `exports/<qid>.response.md`
               (clean Q->A, sources by doc name, approved-only; a human reviews + sends it).
+  --approve   interactively review EACH item and type a human decision before export
+              (implies --response). Routed items walk the real human path
+              ROUTED_FOR_REVIEW -> REVIEW_APPROVED -> APPROVED (actor="human");
+              reject -> REVIEW_REJECTED (stays unexported). Without it, the prior
+              auto-simulate behavior is unchanged.
 
 Defaults:
   path : data/questionnaires/case_bulk20.synthetic.json
@@ -31,10 +36,28 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 
+def _decide(prompt: str) -> str:
+    """Read a one-key human decision: returns 'a' (approve), 'r' (reject), or 's' (skip).
+
+    Defaults to 's' on EOF/Ctrl-C so piped stdin and interrupts are safe
+    (RULE_SAFE_TERMINAL spirit) — never crashes the review.
+    """
+    try:
+        raw = input(prompt).strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return "s"
+    if raw in ("a", "approve"):
+        return "a"
+    if raw in ("r", "reject"):
+        return "r"
+    return "s"
+
+
 def main() -> None:
     argv = sys.argv[1:]
     live = "--live" in argv
-    want_response = "--response" in argv  # also write the send-ready response document
+    approve = "--approve" in argv  # interactively approve/reject each item before export
+    want_response = "--response" in argv or approve  # --approve implies the response export
 
     out_arg: str | None = None
     skip_idx: set[int] = set()
@@ -161,24 +184,75 @@ def main() -> None:
     # items (actor="human" — the agent NEVER self-approves), then write the send-ready response
     # document. Routed/ungrounded/sensitive items stay unapproved → "under internal review".
     if want_response:
+        from app.audit import new_audit_event, write_audit
+        from app.config import RULE_NO_SELF_APPROVE
         from app.export import export_response_document
         from app.schema import ResponseDoc
         from app.state import transition
 
+        # Record one human-actor transition to the audit log (RULE_NO_SELF_APPROVE +
+        # RULE_AUDIT_COMPLETE) and return the new status. Same audit_log the pipeline
+        # wrote, so the per-item timeline stays continuous.
+        def _human_transition(item, from_state: str, to_state: str) -> str:
+            new_status = transition(from_state, to_state, actor="human")
+            write_audit(
+                new_audit_event(
+                    questionnaire_id=qid, item_id=item.item_id,
+                    event="state_transition", from_state=from_state, to_state=new_status,
+                    rule=RULE_NO_SELF_APPROVE, detail={"actor": "human", "action": to_state},
+                ),
+                log_path=audit_log,
+            )
+            return new_status
+
         source_by_chunk = {c.chunk_id: c.source for c in kb if c.source}
         approved_n = 0
+        rejected_n = 0
         review_items = []
         for it in result.response_doc.items:
             r = result.routing.get(it.item_id)
             is_routed = bool(r and r.should_route)
             is_sensitive = bool(set(it.sensitivities) & {"internal", "restricted"})
             is_ungrounded = it.draft_text == UNGROUNDED_PLACEHOLDER
-            if it.status == "SCORED" and not is_routed and not is_sensitive and not is_ungrounded:
-                new_status = transition(it.status, "APPROVED", actor="human")
-                review_items.append(it.model_copy(update={"status": new_status, "review_approved": True}))
-                approved_n += 1
+
+            if approve:
+                # Interactive human gate. Ungrounded placeholders have no real answer to approve.
+                if is_ungrounded:
+                    print(f"\n── {it.item_id} ── UNGROUNDED placeholder — not approvable; skipped.")
+                    review_items.append(it)
+                    continue
+                conf = f"{it.confidence_score:.3f}" if it.confidence_score is not None else "n/a"
+                print(f"\n── {it.item_id} ──")
+                print(f"   Q: {it.question}")
+                print(f"   ROUTED → {r.queue} ({r.reason_code})" if is_routed
+                      else f"   confident draft (conf={conf}), not routed")
+                preview = it.draft_text[:200].replace("\n", " ")
+                print(f"   Draft: {preview}{'…' if len(it.draft_text) > 200 else ''}")
+                choices = "[a]pprove / [r]eject / [s]kip: " if is_routed else "[a]pprove / [s]kip: "
+                d = _decide(f"   {choices}")
+                if d == "a" and is_routed:
+                    s = _human_transition(it, it.status, "REVIEW_APPROVED")
+                    s = _human_transition(it, s, "APPROVED")
+                    review_items.append(it.model_copy(update={"status": s, "review_approved": True}))
+                    approved_n += 1
+                elif d == "a":  # non-routed SCORED → APPROVED
+                    s = _human_transition(it, it.status, "APPROVED")
+                    review_items.append(it.model_copy(update={"status": s, "review_approved": True}))
+                    approved_n += 1
+                elif d == "r" and is_routed:
+                    s = _human_transition(it, it.status, "REVIEW_REJECTED")
+                    review_items.append(it.model_copy(update={"status": s}))
+                    rejected_n += 1
+                else:
+                    review_items.append(it)
             else:
-                review_items.append(it)
+                # Default auto-simulate (byte-identical to prior behavior; no audit event).
+                if it.status == "SCORED" and not is_routed and not is_sensitive and not is_ungrounded:
+                    new_status = transition(it.status, "APPROVED", actor="human")
+                    review_items.append(it.model_copy(update={"status": new_status, "review_approved": True}))
+                    approved_n += 1
+                else:
+                    review_items.append(it)
 
         response_doc = ResponseDoc(
             questionnaire_id=qid,
@@ -189,10 +263,11 @@ def main() -> None:
             response_doc, source_by_chunk,
             out_dir=_REPO_ROOT / "exports", log_path=audit_log,
         )
-        pending_n = len(review_items) - approved_n
+        pending_n = len(review_items) - approved_n - rejected_n
+        extra = f" · {rejected_n} rejected" if approve else ""
         print(
             f"Response document: {rpath}  "
-            f"({approved_n} approved + sent-ready · {pending_n} pending internal review)"
+            f"({approved_n} approved + sent-ready{extra} · {pending_n} pending internal review)"
         )
 
 

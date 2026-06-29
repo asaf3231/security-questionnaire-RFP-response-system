@@ -1,0 +1,45 @@
+{
+  "questionnaire_id": "q-demo-live-001",
+  "items": [
+    {
+      "item_id": "q-demo-live-001-i1",
+      "question": "Does your platform encrypt data at rest, and if so, what encryption standard do you use?",
+      "topic_tags": ["encryption", "infrastructure", "data-handling"]
+    },
+    {
+      "item_id": "q-demo-live-001-i2",
+      "question": "Is data in transit encrypted? What protocol versions are supported?",
+      "topic_tags": ["encryption", "infrastructure", "network-security"]
+    },
+    {
+      "item_id": "q-demo-live-001-i3",
+      "question": "Do you support multi-factor authentication for user accounts?",
+      "topic_tags": ["access-control", "security", "identity"]
+    },
+    {
+      "item_id": "q-demo-live-001-i4",
+      "question": "Do you perform regular third-party penetration testing of your platform?",
+      "topic_tags": ["vulnerability-management", "security"]
+    },
+    {
+      "item_id": "q-demo-live-001-i5",
+      "question": "Are you SOC 2 Type II certified, and how often is the audit refreshed?",
+      "topic_tags": ["certification", "compliance"]
+    },
+    {
+      "item_id": "q-demo-live-001-i6",
+      "question": "Do you have a formal incident response plan, and what are the breach notification timelines?",
+      "topic_tags": ["incident-response", "compliance"]
+    },
+    {
+      "item_id": "q-demo-live-001-i7",
+      "question": "What are your subprocessor and vendor management practices?",
+      "topic_tags": ["vendor-management", "compliance"]
+    },
+    {
+      "item_id": "q-demo-live-001-i8",
+      "question": "What is your SLA for platform uptime and availability?",
+      "topic_tags": ["availability", "infrastructure"]
+    }
+  ]
+}
