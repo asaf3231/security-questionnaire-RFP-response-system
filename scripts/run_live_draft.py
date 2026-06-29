@@ -3,14 +3,18 @@ scripts/run_live_draft.py — make demo-live (gated live Claude draft).
 
 Responsibility: run the Comet pipeline on the confident demo case using the
 ClaudeLLM provider (the real Claude API), then run an INTERACTIVE human-review
-gate — a person types approve/reject per item; approved items are exported, a
-rejected item's answer becomes "answer rejected". Requires ANTHROPIC_API_KEY to
-be set. If the key is absent, prints a clear message and exits 0 (clean skip).
+gate. A human only reviews the EXCEPTIONS — items that RULE_HITM_REVIEW_TRIGGER
+routed for review (typed approve/reject per routed item). Confident, non-routed
+drafts are auto-approved without a prompt (mirroring the offline make demo);
+approved items are exported, a rejected item's answer becomes "answer rejected".
+Requires ANTHROPIC_API_KEY to be set. If the key is absent, prints a clear
+message and exits 0 (clean skip).
 
 This is the ONLY path in the system that makes a Claude API call.
 It still writes to local disk only — no external send (RULE_NO_EXTERNAL_SEND).
 Approval is a human action only (actor="human"); the agent never self-approves
-(RULE_NO_SELF_APPROVE). Decisions read from stdin; there is no skip — EOF/Ctrl-C
+(RULE_NO_SELF_APPROVE) — the auto-approval of confident drafts still goes through
+transition(actor="human"). Decisions read from stdin; there is no skip — EOF/Ctrl-C
 aborts the review and leaves remaining items unreviewed.
 
 Import-safe: no side effects at import. load_env() + API key check inside main() only.
@@ -161,8 +165,9 @@ def main() -> None:
     print()
     print(f"<thinking> stripped from all drafts: {not leaked}" + (f"  LEAK={leaked}" if leaked else ""))
 
-    # Interactive human-review gate (RULE_NO_SELF_APPROVE — actor="human" only).
-    # A person types approve/reject/skip per item; approved items are exported.
+    # Human-review gate (RULE_NO_SELF_APPROVE — actor="human" only). Confident,
+    # non-routed drafts are auto-approved; a person types approve/reject for each
+    # routed exception. Approved items are exported.
     def _human_transition(item, from_state: str, to_state: str) -> str:
         """Record one human-actor transition to the audit log and return the new status."""
         new_status = transition(from_state, to_state, actor="human")
@@ -182,7 +187,8 @@ def main() -> None:
 
     print()
     print("─" * 72)
-    print("  HUMAN REVIEW — approve/reject each item (you, actor=human)")
+    print("  HUMAN REVIEW — approve/reject routed exceptions only (you, actor=human)")
+    print("  Confident, non-routed drafts are auto-approved.")
     print("─" * 72)
 
     updated_items = []
@@ -208,33 +214,32 @@ def main() -> None:
             continue
 
         conf_str = f"{doc_item.confidence_score:.3f}" if doc_item.confidence_score is not None else "n/a"
+
+        # Confident, non-routed draft → auto-approve without a prompt (simulated
+        # human gate, mirroring run_demo.py). Still actor="human" — RULE_NO_SELF_APPROVE.
+        if not is_routed:
+            s = _human_transition(doc_item, doc_item.status, "APPROVED")
+            updated_items.append(doc_item.model_copy(update={"status": s, "review_approved": True}))
+            approved_ids.append(iid)
+            print(f"\n  {iid}  (confidence={conf_str})  confident draft — auto-approved")
+            continue
+
+        # Routed exception → interactive human review.
         print(f"\n  {iid}  (confidence={conf_str})")
-        if is_routed:
-            print(f"  ROUTED → queue={routing.queue}  reason={routing.reason_code}")
-        else:
-            print("  Not routed (confident draft)")
+        print(f"  ROUTED → queue={routing.queue}  reason={routing.reason_code}")
         choice = _decide("  [a]pprove / [r]eject: ")
 
         if choice == "q":  # EOF/Ctrl-C — abort; leave this and the rest unreviewed
             aborted = True
             updated_items.append(doc_item)
             continue
-        if choice == "a" and is_routed:
+        if choice == "a":  # approve a routed item → REVIEW_APPROVED → APPROVED
             s = _human_transition(doc_item, doc_item.status, "REVIEW_APPROVED")
             s = _human_transition(doc_item, s, "APPROVED")
             updated_items.append(doc_item.model_copy(update={"status": s, "review_approved": True}))
             approved_ids.append(iid)
-        elif choice == "a":  # non-routed SCORED → APPROVED
-            s = _human_transition(doc_item, doc_item.status, "APPROVED")
-            updated_items.append(doc_item.model_copy(update={"status": s, "review_approved": True}))
-            approved_ids.append(iid)
-        elif is_routed:  # reject a routed item → REVIEW_REJECTED
+        else:  # reject a routed item → REVIEW_REJECTED
             s = _human_transition(doc_item, doc_item.status, "REVIEW_REJECTED")
-            updated_items.append(doc_item.model_copy(update={"status": s}))
-            rejected_ids.append(iid)
-        else:  # reject a confident non-routed item: human flags then rejects (SCORED→ROUTED_FOR_REVIEW→REVIEW_REJECTED)
-            s = _human_transition(doc_item, doc_item.status, "ROUTED_FOR_REVIEW")
-            s = _human_transition(doc_item, s, "REVIEW_REJECTED")
             updated_items.append(doc_item.model_copy(update={"status": s}))
             rejected_ids.append(iid)
 

@@ -84,12 +84,16 @@ evidence addresses the question ≥ `GROUNDING_QUESTION_COVERAGE_MIN`. Otherwise
 `ITEM_STATES = INTAKE → RETRIEVED → DRAFTED → SCORED → {ROUTED_FOR_REVIEW → REVIEW_APPROVED |
 REVIEW_REJECTED} → APPROVED → EXPORTED`. Illegal edges raise `InvalidTransition`. The agent may never
 transition to APPROVED/EXPORTED — only `actor="human"` can (`SelfApproveBlocked` otherwise).
-**Human review, two modes:** `make demo` auto-simulates approval for confident/non-sensitive items
-(still `actor="human"`); `run_questionnaire.py --approve` is an interactive per-item gate
-(`[a]pprove / [r]eject / [s]kip`) where a routed item walks the real path
-`ROUTED_FOR_REVIEW → REVIEW_APPROVED → APPROVED` and a reject becomes `REVIEW_REJECTED` (stays
-unexported, rendered as "answer rejected"). Each human decision writes its own `state_transition` audit
-event (`RULE_NO_SELF_APPROVE`, `actor="human"`).
+**Human review, three modes:** (1) `make demo` (offline) auto-simulates approval for
+confident/non-sensitive items (still `actor="human"`); (2) `run_questionnaire.py --approve` is an
+interactive per-item gate (`[a]pprove / [r]eject / [s]kip`); (3) `make demo-live` (gated live lane)
+reviews **only the routed exceptions** — confident, non-routed drafts are auto-approved without a
+prompt (mirroring `make demo`), and the human types `[a]pprove / [r]eject` only for items that
+`RULE_HITM_REVIEW_TRIGGER` routed (ungrounded placeholders are left unreviewed). In every mode a routed
+item walks the real path `ROUTED_FOR_REVIEW → REVIEW_APPROVED → APPROVED` and a reject becomes
+`REVIEW_REJECTED` (stays unexported, rendered as "answer rejected"); auto-approval still goes through
+`transition(actor="human")`. Each human decision writes its own `state_transition` audit event
+(`RULE_NO_SELF_APPROVE`, `actor="human"`).
 
 ## 6. Reviewer routing (`app/routing.py`)
 `RULE_HITM_REVIEW_TRIGGER`, precedence order (first match wins): (1) high-risk tag (`HIGH_RISK_TAGS`) →
