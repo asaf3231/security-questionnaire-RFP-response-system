@@ -182,25 +182,35 @@ behind it (vendor is a swap behind the interface):
   in the whole system. The Anthropic client is a lazy singleton (`config._get_claude()`,
   `app/config.py:160`) — never built at import time.
 
-**The prompt / tool-call pattern** (`ClaudeLLM._build_prompt`, `app/llm.py:229`): the prompt is built
-**only** from the ContextStack, in a fixed order — `INSTRUCTIONS → QUESTION → RETRIEVAL CONTEXT →
-CONSTRAINTS → STATE → TASK`. The TASK block enforces the output contract:
-- a **mandatory citation format** — every factual sentence must end with its `[chunk_id]`, and the
-  answer must end with a `Sources: [..]` line; *an answer with zero `[chunk_id]` markers is invalid.*
-- a one-shot worked example of the inline-citation format.
-- "if the context doesn't address the question, say so plainly and don't invent a citation."
+**The prompt pattern** (`ClaudeLLM._build_prompt`, `app/llm.py`): the prompt is built **only** from the
+ContextStack, in a fixed order — `INSTRUCTIONS → QUESTION → RETRIEVAL CONTEXT → CONSTRAINTS → STATE →
+TASK`. The TASK block tells the model to answer only from the Retrieval Context and to cite the chunks
+it used (with a one-shot example), and "if the context doesn't address the question, say so and don't
+invent a citation."
 
-(Live evidence drove this prompt: a prior `<thinking>` scaffold suppressed inline citations and tanked
-live grounding, so it was removed; see `FACTS.md` Stage-10 row.)
+**The tool-call pattern — `submit_answer` (live lane, structured citations).** In the live lane the
+draft call uses Anthropic's native **tool use / function calling**: it passes a `submit_answer` tool
+whose `input_schema` makes `answer` **and** `citations` (an array of chunk_ids) *required* fields, and
+forces the model to use it via `tool_choice={"type":"tool","name":"submit_answer"}`
+(`_SUBMIT_ANSWER_TOOL`, `app/llm.py`). So citations are a **schema-required field**, not regex-scraped
+from prose — this removes the intermittent "cit=0" failure where the model dropped its inline
+`[chunk_id]` markers and the grounding gate then (correctly) rejected a covered answer. The tool result
+is read from the `tool_use` block (`_extract_tool_answer`); a text-only response falls back to the prose
+path (backward-compatible).
 
-**Structured output / schema.** The model's text is parsed into a typed Pydantic structure, never a
-free string:
+**Structured output / schema.** Whichever path produced the answer, it is normalized into a typed
+Pydantic structure, never a free string:
 - `DraftAnswer { text: str, citations: list[Citation] }` (`app/schema.py:87`) — `text` must be
   non-empty (validator), and `citations` is a list of `Citation { chunk_id, source }`
   (`app/schema.py:80`).
-- citations are parsed from the `[chunk_id]` markers, and **only** ids that actually appear in the
-  retrieval layer are kept — fabricated ids are dropped at parse time (`_parse_citations`,
-  `app/llm.py:131`).
+- citations are **validated against the retrieval layer** — model-claimed ids that weren't retrieved are
+  dropped (no fabrication), de-duplicated, and any inline `[chunk_id]` markers the model also wrote into
+  the answer text are recovered as a union (`_known_chunk_ids` + `_parse_citations`, `app/llm.py`).
+- empty / malformed tool input degrades to `UNGROUNDED_PLACEHOLDER` (`DRAFT2`).
+
+(Live evidence drove this design: a prior `<thinking>` scaffold suppressed inline citations and tanked
+live grounding; the `submit_answer` tool then made citations structural rather than prose-scraped — see
+`FACTS.md`.)
 
 **Step C — the grounding gate (this is what makes it a *safe* response).** Right after drafting, every
 draft passes through `grounding_check()` — the single chokepoint for `RULE_GROUNDED_ONLY`
@@ -394,9 +404,16 @@ questionnaire move through "retrieving → drafted → scored → awaiting revie
 
 **The human gate is part of the state model.** `REVIEW_APPROVED`, `REVIEW_REJECTED`, `APPROVED`,
 `EXPORTED` are `HUMAN_ONLY_TARGETS` (`app/state.py:95`) — the agent can drive an item up to `SCORED` /
-`ROUTED_FOR_REVIEW`, but only `actor="human"` advances it to approved/exported (demo simulation at
-`scripts/run_demo.py:155`). This is exactly the "awaiting legal review" → "ready for export" handoff,
-with the SLA/turnaround being an organizational layer on top of these states.
+`ROUTED_FOR_REVIEW`, but only `actor="human"` advances it to approved/exported. This is exactly the
+"awaiting legal review" → "ready for export" handoff, with the SLA/turnaround being an organizational
+layer on top of these states. Two ways to exercise the gate:
+- **Auto-simulated** (`make demo`, `scripts/run_demo.py`): confident, non-sensitive items are approved
+  automatically (still `actor="human"`) so the demo runs end-to-end unattended.
+- **Interactive reviewer** (`scripts/run_questionnaire.py --approve`): the operator reviews **each item**
+  and types `[a]pprove / [r]eject / [s]kip`. A routed item walks the real human path
+  `ROUTED_FOR_REVIEW → REVIEW_APPROVED → APPROVED`; a reject becomes `REVIEW_REJECTED` and stays
+  unexported. Every human decision writes its own `state_transition` audit event
+  (`rule=RULE_NO_SELF_APPROVE`, `actor="human"`).
 
 ### Defensible talking point
 > "Status is a typed state machine, not a string someone sets by hand. Illegal jumps raise, and every
