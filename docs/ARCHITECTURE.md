@@ -32,6 +32,7 @@ Reindeer RFP / Security-Questionnaire Response Agent. Constants live in `app/con
    ┌───────────────────────────────────────────────────────────────┐
    │ 3. DRAFT + GROUNDING GATE                                       │
    │    llm.py: MockLLM (default) / ClaudeLLM (live)                 │
+   │    live: submit_answer tool-use → schema-required citations     │
    │    draft.py grounding_check  [RULE_GROUNDED_ONLY]:              │
    │      ≥1 citation · valid chunk_id · coverage≥0.5 · q-cov≥0.30   │
    │      FAIL → UNGROUNDED_PLACEHOLDER          (RETRIEVED → DRAFTED)│
@@ -65,7 +66,9 @@ Reindeer RFP / Security-Questionnaire Response Agent. Constants live in `app/con
                                    ▼
    ┌───────────────────────────────────────────────────────────────┐
    │ 6. HUMAN-IN-THE-LOOP — app/state.py  [RULE_NO_SELF_APPROVE]    │
-   │    only actor="human" reaches APPROVED  (demo: run_demo.py)     │
+   │    only actor="human" reaches APPROVED                          │
+   │    auto-simulated (make demo) OR interactive [a]/[r]/[s]        │
+   │    (run_questionnaire.py --approve) · reject → REVIEW_REJECTED  │
    └───────────────────────────────────────────────────────────────┘
                                    │  APPROVED (human)
                                    ▼
