@@ -2,11 +2,16 @@
 scripts/run_live_draft.py — make demo-live (gated live Claude draft).
 
 Responsibility: run the Comet pipeline on the confident demo case using the
-ClaudeLLM provider (the real Claude API). Requires ANTHROPIC_API_KEY to be set.
-If the key is absent, prints a clear message and exits 0 (clean skip, not failure).
+ClaudeLLM provider (the real Claude API), then run an INTERACTIVE human-review
+gate — a person types approve/reject per item; approved items are exported, a
+rejected item's answer becomes "answer rejected". Requires ANTHROPIC_API_KEY to
+be set. If the key is absent, prints a clear message and exits 0 (clean skip).
 
 This is the ONLY path in the system that makes a Claude API call.
 It still writes to local disk only — no external send (RULE_NO_EXTERNAL_SEND).
+Approval is a human action only (actor="human"); the agent never self-approves
+(RULE_NO_SELF_APPROVE). Decisions read from stdin; there is no skip — EOF/Ctrl-C
+aborts the review and leaves remaining items unreviewed.
 
 Import-safe: no side effects at import. load_env() + API key check inside main() only.
 """
@@ -29,6 +34,25 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def _decide(prompt: str) -> str:
+    """Read a human decision: 'a' (approve) or 'r' (reject). Re-prompts on anything else.
+
+    There is no skip option. Returns 'q' (abort) only on EOF/Ctrl-C so exhausted or
+    piped stdin can't loop forever (RULE_SAFE_TERMINAL spirit); the caller then leaves
+    that item and the rest unreviewed.
+    """
+    while True:
+        try:
+            raw = input(prompt).strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            return "q"
+        if raw in ("a", "approve"):
+            return "a"
+        if raw in ("r", "reject"):
+            return "r"
+        print("  please type 'a' (approve) or 'r' (reject)")
+
+
 def main() -> None:
     """Entry point for make demo-live (gated; requires ANTHROPIC_API_KEY)."""
     # load_env() called here only — never at import (import-safe)
@@ -49,14 +73,14 @@ def main() -> None:
     from app.llm import ClaudeLLM
     from app.pipeline import run_pipeline
     from app.confidence import confidence_band
-    from app.export import export_response
+    from app.export import export_response, export_response_document
     from app.audit import new_audit_event, write_audit
     from app.state import transition
-    from app.config import RULE_NO_SELF_APPROVE
+    from app.config import RULE_NO_SELF_APPROVE, UNGROUNDED_PLACEHOLDER
     from app.schema import ResponseDoc
 
     repo_root = _repo_root()
-    questionnaire_path = repo_root / "data" / "questionnaires" / "case_confident.synthetic.json"
+    questionnaire_path = repo_root / "data" / "questionnaires" / "case_demo_live.synthetic.json"
     export_dir = repo_root / "exports"
     audit_dir = repo_root / "audit"
 
@@ -72,7 +96,9 @@ def main() -> None:
     audit_dir.mkdir(parents=True, exist_ok=True)
     audit_log_path = audit_dir / f"{qid}-live.jsonl"
 
-    retriever = Retriever(load_kb())
+    kb = load_kb()
+    retriever = Retriever(kb)
+    source_by_chunk = {c.chunk_id: c.source for c in kb if c.source}
     policy_tags = load_policy_tags()
     provider = ClaudeLLM()  # gated live lane — uses the real Claude API
 
@@ -135,34 +161,82 @@ def main() -> None:
     print()
     print(f"<thinking> stripped from all drafts: {not leaked}" + (f"  LEAK={leaked}" if leaked else ""))
 
-    # Simulate human approval for non-routed, non-sensitive items and export
+    # Interactive human-review gate (RULE_NO_SELF_APPROVE — actor="human" only).
+    # A person types approve/reject/skip per item; approved items are exported.
+    def _human_transition(item, from_state: str, to_state: str) -> str:
+        """Record one human-actor transition to the audit log and return the new status."""
+        new_status = transition(from_state, to_state, actor="human")
+        write_audit(
+            new_audit_event(
+                questionnaire_id=qid,
+                item_id=item.item_id,
+                event="state_transition",
+                from_state=from_state,
+                to_state=new_status,
+                rule=RULE_NO_SELF_APPROVE,
+                detail={"actor": "human", "action": to_state},
+            ),
+            log_path=audit_log_path,
+        )
+        return new_status
+
+    print()
+    print("─" * 72)
+    print("  HUMAN REVIEW — approve/reject each item (you, actor=human)")
+    print("─" * 72)
+
     updated_items = []
     approved_ids = []
+    rejected_ids = []
+    aborted = False
 
     for doc_item in result.response_doc.items:
         iid = doc_item.item_id
         routing = result.routing.get(iid)
-        is_routed = routing and routing.should_route
-        has_restricted_sens = bool(set(doc_item.sensitivities) & {"internal", "restricted"})
+        is_routed = bool(routing and routing.should_route)
+        is_ungrounded = doc_item.draft_text == UNGROUNDED_PLACEHOLDER
 
-        if doc_item.status == "SCORED" and not is_routed and not has_restricted_sens:
-            new_status = transition(doc_item.status, "APPROVED", actor="human")
-            write_audit(
-                new_audit_event(
-                    questionnaire_id=qid,
-                    item_id=iid,
-                    event="state_transition",
-                    from_state=doc_item.status,
-                    to_state=new_status,
-                    rule=RULE_NO_SELF_APPROVE,
-                    detail={"actor": "human", "action": "APPROVED"},
-                ),
-                log_path=audit_log_path,
-            )
-            updated_items.append(doc_item.model_copy(update={"status": new_status, "review_approved": True}))
-            approved_ids.append(iid)
-        else:
+        # Once aborted (EOF/Ctrl-C), leave every remaining item unreviewed.
+        if aborted:
             updated_items.append(doc_item)
+            continue
+
+        # Ungrounded placeholders have no real answer to approve.
+        if is_ungrounded:
+            print(f"\n  {iid}: UNGROUNDED placeholder — not approvable; left unreviewed.")
+            updated_items.append(doc_item)
+            continue
+
+        conf_str = f"{doc_item.confidence_score:.3f}" if doc_item.confidence_score is not None else "n/a"
+        print(f"\n  {iid}  (confidence={conf_str})")
+        if is_routed:
+            print(f"  ROUTED → queue={routing.queue}  reason={routing.reason_code}")
+        else:
+            print("  Not routed (confident draft)")
+        choice = _decide("  [a]pprove / [r]eject: ")
+
+        if choice == "q":  # EOF/Ctrl-C — abort; leave this and the rest unreviewed
+            aborted = True
+            updated_items.append(doc_item)
+            continue
+        if choice == "a" and is_routed:
+            s = _human_transition(doc_item, doc_item.status, "REVIEW_APPROVED")
+            s = _human_transition(doc_item, s, "APPROVED")
+            updated_items.append(doc_item.model_copy(update={"status": s, "review_approved": True}))
+            approved_ids.append(iid)
+        elif choice == "a":  # non-routed SCORED → APPROVED
+            s = _human_transition(doc_item, doc_item.status, "APPROVED")
+            updated_items.append(doc_item.model_copy(update={"status": s, "review_approved": True}))
+            approved_ids.append(iid)
+        elif is_routed:  # reject a routed item → REVIEW_REJECTED
+            s = _human_transition(doc_item, doc_item.status, "REVIEW_REJECTED")
+            updated_items.append(doc_item.model_copy(update={"status": s}))
+            rejected_ids.append(iid)
+        else:  # reject a confident non-routed item: human flags then rejects (SCORED→ROUTED_FOR_REVIEW→REVIEW_REJECTED)
+            s = _human_transition(doc_item, doc_item.status, "ROUTED_FOR_REVIEW")
+            s = _human_transition(doc_item, s, "REVIEW_REJECTED")
+            updated_items.append(doc_item.model_copy(update={"status": s}))
+            rejected_ids.append(iid)
 
     updated_doc = ResponseDoc(
         questionnaire_id=qid,
@@ -170,14 +244,25 @@ def main() -> None:
         items=updated_items,
     )
 
+    print()
+    print(f"Human-approved: {approved_ids or '(none)'}")
+    if rejected_ids:
+        print(f"Human-rejected: {rejected_ids}")
+
+    # Approved-only artifacts (audit/governance): .md + .csv, APPROVED items only.
     if approved_ids:
         paths = export_response(updated_doc, out_dir=export_dir, log_path=audit_log_path)
-        print()
-        print(f"Human-approved: {approved_ids}")
-        print(f"Exported Markdown: {paths['markdown']}")
-        print(f"Exported CSV     : {paths['csv']}")
+        print(f"Exported (approved-only) Markdown: {paths['markdown']}")
+        print(f"Exported (approved-only) CSV     : {paths['csv']}")
     else:
-        print("\nNo items approved for export.")
+        print("No items approved → approved-only export is empty.")
+
+    # Send-ready response document — ALL questions: approved show the answer,
+    # rejected show "answer rejected", anything else "under internal review".
+    response_path = export_response_document(
+        updated_doc, source_by_chunk, out_dir=export_dir, log_path=audit_log_path
+    )
+    print(f"Response document (all questions): {response_path}")
 
     print(f"\nAudit log: {audit_log_path}")
     print()

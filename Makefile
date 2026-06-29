@@ -6,7 +6,8 @@
 #   integrity  — pre-flight graded-artifact lock (RULE_GRADED_ARTIFACT_LOCK); gates test/eval
 #   test       — run the offline deterministic pytest suite (no .env, no network)
 #   demo       — mocked end-to-end pipeline (MockLLM, no network)
-#   demo-live  — gated live Claude draft (requires ANTHROPIC_API_KEY; still no external send)
+#   demo-live  — gated live Claude draft + INTERACTIVE human approve/reject/export
+#                (requires ANTHROPIC_API_KEY; still no external send)
 #   chat       — interactive terminal REPL, offline MockLLM (type a question, watch the pipeline)
 #   chat-live  — interactive REPL on the live Claude lane (requires ANTHROPIC_API_KEY)
 #   eval       — offline deterministic evaluation harness (computed metrics; no network)

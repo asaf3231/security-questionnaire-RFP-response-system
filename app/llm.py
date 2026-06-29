@@ -128,18 +128,27 @@ class LLMProvider(ABC):
 _CHUNK_ID_RE = re.compile(r"\[([^\]]+)\]")
 
 
+def _known_chunk_ids(retrieval_layer: list[str]) -> set[str]:
+    """Return the set of chunk_ids present in the retrieval layer entries.
+
+    Each entry is a "[chunk_id] text" string; the leading [chunk_id] marker is the id.
+    Used to validate citations (model-claimed or prose-parsed) against what was retrieved.
+    """
+    known_ids: set[str] = set()
+    for entry in retrieval_layer:
+        m = _CHUNK_ID_RE.match(entry)
+        if m:
+            known_ids.add(m.group(1))
+    return known_ids
+
+
 def _parse_citations(text: str, retrieval_layer: list[str]) -> list[Citation]:
     """Extract [chunk_id] markers from `text` and return Citation objects.
 
     Only chunk_ids that appear in the retrieval_layer are considered valid.
     Unknown ids are silently dropped (grounding_check will catch fabricated citations).
     """
-    # Build a set of known chunk_ids from the retrieval layer entries
-    known_ids: set[str] = set()
-    for entry in retrieval_layer:
-        m = _CHUNK_ID_RE.match(entry)
-        if m:
-            known_ids.add(m.group(1))
+    known_ids = _known_chunk_ids(retrieval_layer)
 
     seen: set[str] = set()
     citations: list[Citation] = []
@@ -149,6 +158,60 @@ def _parse_citations(text: str, retrieval_layer: list[str]) -> list[Citation]:
             citations.append(Citation(chunk_id=cid))
             seen.add(cid)
     return citations
+
+
+# ---------------------------------------------------------------------------
+# submit_answer tool — structured, schema-enforced citations (live lane only).
+# Makes `citations` a REQUIRED field instead of regex-scraping [chunk_id] from prose,
+# which the model intermittently drops (the cit=0 grounding failure). The tool is the
+# primary channel; the prose path remains as a fallback (see ClaudeLLM.draft).
+# ---------------------------------------------------------------------------
+_SUBMIT_ANSWER_TOOL: dict = {
+    "name": "submit_answer",
+    "description": (
+        "Submit the grounded answer to the security questionnaire item. Use ONLY the "
+        "Retrieval Context. Every chunk_id you relied on MUST be listed in citations."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "answer": {
+                "type": "string",
+                "description": "The answer, drawn ONLY from the Retrieval Context.",
+            },
+            "citations": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": (
+                    "The chunk_ids supporting the answer — the bracketed ids shown at the "
+                    "start of each Retrieval Context entry; at least one. Use only ids that "
+                    "appear in the Retrieval Context."
+                ),
+            },
+        },
+        "required": ["answer", "citations"],
+    },
+}
+
+
+def _extract_tool_answer(response) -> tuple[str | None, list[str]]:
+    """Return (answer, citations) from a forced submit_answer tool call, or (None, []).
+
+    Scans response.content for a tool_use block named submit_answer (the real anthropic
+    SDK shape: block.type == "tool_use", block.name, block.input dict). Returns (None, [])
+    when no such block exists — e.g. a text-only response (test fakes / API not honoring the
+    tool) — so the caller falls back to the prose path. Faithful to the external boundary only.
+    """
+    for block in getattr(response, "content", []) or []:
+        if getattr(block, "type", None) == "tool_use" and getattr(block, "name", None) == "submit_answer":
+            data = getattr(block, "input", None) or {}
+            answer = data.get("answer")
+            citations = data.get("citations") or []
+            if not isinstance(citations, list):
+                citations = []
+            citations = [c for c in citations if isinstance(c, str)]
+            return (answer if isinstance(answer, str) else None), citations
+    return None, []
 
 
 def _maybe_show(title: str, body: str) -> None:
@@ -318,9 +381,36 @@ class ClaudeLLM(LLMProvider):
                 max_tokens=MAX_OUTPUT_TOKENS,
                 temperature=DRAFT_TEMPERATURE,
                 messages=[{"role": "user", "content": prompt}],
+                tools=[_SUBMIT_ANSWER_TOOL],
+                tool_choice={"type": "tool", "name": "submit_answer"},
             )
 
-            # Extract text content from the response
+            # Primary path: the model returned a structured submit_answer tool call, so
+            # `citations` is a schema-required field (not scraped from prose). This removes the
+            # intermittent cit=0 failure where the model drops inline [chunk_id] markers.
+            tool_answer, tool_citations = _extract_tool_answer(response)
+            if tool_answer is not None:
+                clean_tool = strip_thinking_block(tool_answer).strip()
+                _maybe_show("← Claude request 2 · draft (submit_answer)", clean_tool)
+                if not clean_tool:
+                    return DraftAnswer(text=UNGROUNDED_PLACEHOLDER, citations=[])
+                known = _known_chunk_ids(context_stack.retrieval)
+                seen: set[str] = set()
+                citations: list[Citation] = []
+                # Validated tool citations first (drop unknown/fabricated, dedup), then recover
+                # any inline [chunk_id] markers the model also wrote into the answer text.
+                for cid in tool_citations:
+                    if cid in known and cid not in seen:
+                        citations.append(Citation(chunk_id=cid))
+                        seen.add(cid)
+                for c in _parse_citations(clean_tool, context_stack.retrieval):
+                    if c.chunk_id not in seen:
+                        citations.append(c)
+                        seen.add(c.chunk_id)
+                return DraftAnswer(text=clean_tool, citations=citations)
+
+            # Fallback path: no tool_use block (test fakes / API didn't honor the tool) — parse
+            # the prose response exactly as before.
             raw_text: str = ""
             for block in response.content:
                 if hasattr(block, "text"):
