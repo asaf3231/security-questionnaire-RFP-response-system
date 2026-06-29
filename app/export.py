@@ -56,8 +56,10 @@ _CSV_COLUMNS = ["item_id", "question", "status", "confidence_score", "queue", "c
 def render_markdown(items: list[ResponseDocItem]) -> str:
     """Render a list of ResponseDocItem objects as a Markdown response document.
 
-    Each item becomes a numbered section with question, draft text, status,
-    confidence score, queue, and citations.
+    Each item becomes a numbered section with the question and the answer text only.
+    Internal review metadata (status, confidence, reviewer queue, citation chunk-ids)
+    is intentionally omitted from this send-facing doc; it remains in the .csv export
+    and the audit log for traceability.
 
     Parameters
     ----------
@@ -74,15 +76,6 @@ def render_markdown(items: list[ResponseDocItem]) -> str:
         lines.append(f"## {idx}. {item.question}")
         lines.append("")
         lines.append(item.draft_text)
-        lines.append("")
-        lines.append(f"**Status:** {item.status}")
-        if item.confidence_score is not None:
-            lines.append(f"**Confidence:** {item.confidence_score:.3f}")
-        if item.queue:
-            lines.append(f"**Reviewer queue:** {item.queue}")
-        if item.citations:
-            cids = ", ".join(c.chunk_id for c in item.citations)
-            lines.append(f"**Citations:** {cids}")
         lines.append("")
         lines.append("---")
         lines.append("")
@@ -176,8 +169,9 @@ def render_response_document(doc: ResponseDoc, source_by_chunk: dict[str, str]) 
     """Render the send-ready response document: clean Q -> A, no internal machinery.
 
     APPROVED items show the answer (citations stripped) + a human-readable "Source:" line.
-    Any not-yet-approved item shows "Answer under internal review — to follow." (no answer
-    text, no routing/queue/confidence leaked). If ANY item is unapproved, the byte-exact
+    A REVIEW_REJECTED item shows "answer rejected" (the human declined the draft). Any other
+    not-yet-approved item shows "Answer under internal review — to follow." (no answer text,
+    no routing/queue/confidence leaked). If ANY item is unapproved, the byte-exact
     REVIEW_BANNER is the first line (this draft is not cleared for release).
     """
     has_unapproved = any(item.status != "APPROVED" for item in doc.items)
@@ -196,6 +190,8 @@ def render_response_document(doc: ResponseDoc, source_by_chunk: dict[str, str]) 
             if sources:
                 lines.append("")
                 lines.append(f"_Source: {', '.join(sources)}_")
+        elif item.status == "REVIEW_REJECTED":
+            lines.append("_answer rejected_")
         else:
             lines.append("_Answer under internal review — to follow._")
         lines.append("")

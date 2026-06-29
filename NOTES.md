@@ -496,3 +496,39 @@ Pointer (payload = the commit + the FACTS auto-tag / live-grounding rows); PM-ve
 - **case_bulk20 i20** swapped (security-training → business-continuity/DR) so it is a genuine ungrounded
   negative; the file stays **gitignored/local** per Asaf's submission-cleanup decision (NOT committed).
 - `/code-review`: 1 LOW finding (run_questionnaire `--out` arg-parse edge) found + fixed; else clean.
+
+## 2026-06-29 — [BACKEND] Cite-based sensitivity routing + demo-live i5 reword
+
+### D-S7c — Sensitivity routing (trigger 4) keys off CITED chunks, not the retrieval set *(graded contract — Asaf-ratified)*
+**Decision:** `RULE_HITM_REVIEW_TRIGGER` trigger 4 now fires `ROUTED_SENSITIVE` only when a chunk the
+draft **cited** carries `internal`/`restricted` — aligning routing with the cite-based **export** gate
+(`app/export.py:254` already holds on cited `item.sensitivities`). Implemented as an additive,
+keyword-only `route_for_review(*, cited_chunk_ids=None)`; `None` preserves the legacy retrieval-set
+behavior so every prior caller is byte-identical (the [[D-DN-QA50]] `grounded=` precedent).
+`app/pipeline.py` + `app/eval/harness.py` pass `{c.chunk_id for c in draft.citations}`.
+**Reason:** the retrieval-based check over-routed — a public, grounded answer (demo-live i1/i2/i6) was
+sent to the compliance queue purely because an `internal` neighbor (kb-009 residency, kb-010 vendor)
+rode along in the top-k, though the answer cited only public chunks. Routing and export already
+*disagreed* (export was cite-based); chronic false positives erode the triage signal. Residual
+citation-suppression risk (the old retrieval-based backstop, [[D-S7]] Option-A + the redteam
+`test_injection_cannot_downgrade_sensitivity_gate`) is mitigated by the grounding coverage gate +
+`RULE_NO_SELF_APPROVE` (a human approves **every** export). Asaf chose precision over the backstop.
+**Impact:** **offline byte-neutral** — MockLLM cites its whole retrieval layer (`app/llm.py`) ⇒
+cited==retrieved ⇒ DEMO1 i2 + eval-004/005 + the trigger-4 tests unchanged; `make test`/`make eval`
+green. Live i1/i2/i6 → confident auto-draft; i7 (cites internal kb-010) still ROUTED_SENSITIVE. New
+add-only `tests/test_cite_based_sensitivity.py` exercises selective-citation (the red/green the
+MockLLM can't). Only graded surface = the `route_for_review` signature (surfaced + Asaf-approved).
+Numbers → [[FACTS.md]].
+
+### D-DEMO-i5 — demo-live i5 reworded to a clean ungrounded-refusal
+**Decision:** `data/questionnaires/case_demo_live.synthetic.json` i5 changed from the double-barreled
+"Are you SOC 2 Type II certified, and how often is the audit refreshed?" to **"What is your
+recertification renewal frequency in months?"** — significant tokens that appear in **no** KB chunk.
+**Reason:** the old i5 flaked run-to-run — the live model sometimes answered only the answerable SOC2
+clause (grounded/confident) and sometimes attempted the unanswerable refresh clause (grounding-fail).
+The token-fraction `question_coverage` gate can't see a dropped sub-clause when the answerable half
+supplies the tokens. The reword drives `question_coverage` deterministically < `GROUNDING_QUESTION_COVERAGE_MIN`
+at every citation breadth (verified k1–k5), making i5 a **stable** anti-hallucination refusal demo
+(UNGROUNDED_PLACEHOLDER → routed/held). Demo-input data only; not referenced by the graded suite.
+**Impact:** demo-live now reads cleanly — 4 confident auto-drafts (i1/i2/i6/i8), 2 high-risk reviews
+(i3/i4→security), 1 cited-sensitive review (i7→compliance), 1 ungrounded refusal (i5). Numbers → [[FACTS.md]].

@@ -379,7 +379,15 @@ def run_pipeline(
             # 5. ROUTE FOR REVIEW
             # ----------------------------------------------------------------
             routing_decision = route_for_review(
-                routing_item, chunks, confidence, policy_tags, grounded=grounding_result.grounded
+                routing_item,
+                chunks,
+                confidence,
+                policy_tags,
+                grounded=grounding_result.grounded,
+                # Cite-based sensitivity gate: a sensitive chunk only routes if the
+                # answer actually CITED it (aligns with the export gate; avoids
+                # over-routing a public answer whose internal neighbor rode along).
+                cited_chunk_ids={c.chunk_id for c in final_draft.citations},
             )
             write_audit(
                 new_audit_event(
